@@ -100,6 +100,7 @@ class Config(object):
         'write_video': False,
         'display_settings': {
           'radar': True,
+          'scoreboard': True,
         },
     }
     self._values['render_resolution_y'] = int(

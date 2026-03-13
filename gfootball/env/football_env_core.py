@@ -78,6 +78,7 @@ class FootballEnvCore(object):
     env.game_config.render_resolution_x = self._config['render_resolution_x']
     env.game_config.render_resolution_y = self._config['render_resolution_y']
     env.game_config.display_radar = self._config['display_settings']['radar']
+    env.game_config.display_scoreboard = self._config['display_settings']['scoreboard']
     return env
 
   def _reset(self, animations, inc):

@@ -243,16 +243,17 @@ Match::Match(MatchData *matchData, const std::vector<AIControlledKeyboard *> &co
   // GUI
   Gui2Root *root = menuTask->GetWindowManager()->GetRoot();
 
-  radar = nullptr;
   if (GetGameConfig().display_radar) {
     radar = new Gui2Radar(menuTask->GetWindowManager(), "game_radar", 38, 78, 24, 18, this, matchData->GetTeamData(0).GetColor1(), matchData->GetTeamData(0).GetColor2(), matchData->GetTeamData(1).GetColor1(), matchData->GetTeamData(1).GetColor2());
     root->AddView(radar);
     radar->Show();
   }
 
-  scoreboard = new Gui2ScoreBoard(menuTask->GetWindowManager(), this);
-  root->AddView(scoreboard);
-  scoreboard->Show();
+  if (GetGameConfig().display_scoreboard) {
+    scoreboard = new Gui2ScoreBoard(menuTask->GetWindowManager(), this);
+    root->AddView(scoreboard);
+    scoreboard->Show();
+  }
 
   messageCaption = new Gui2Caption(menuTask->GetWindowManager(), "game_messages", 0, 0, 80, 8, "");
   messageCaption->SetTransparency(0.3f);
@@ -311,8 +312,10 @@ void Match::Exit() {
     delete radar;
   }
 
-  scoreboard->Exit();
-  delete scoreboard;
+  if (GetGameConfig().display_scoreboard) {
+    scoreboard->Exit();
+    delete scoreboard;
+  }
 
   menuTask.reset();
 }
@@ -951,7 +954,9 @@ bool Match::Process() {
       DO_VALIDATION;
       matchData->SetGoalCount(teams[team]->GetID(),
                               matchData->GetGoalCount(team) + 1);
-      scoreboard->SetGoalCount(team, matchData->GetGoalCount(team));
+      if (GetGameConfig().display_scoreboard) {
+        scoreboard->SetGoalCount(team, matchData->GetGoalCount(team));
+      }
       goalScored = true;
       lastGoalTeam = teams[team];
       teams[team]->GetController()->UpdateTactics();
@@ -1113,7 +1118,9 @@ void Match::Put() {
   timeStr += ":";
   if (seconds < 10) timeStr += "0";
   timeStr += int_to_str(seconds);
-  scoreboard->SetTimeStr(timeStr);
+  if (GetGameConfig().display_scoreboard) {
+    scoreboard->SetTimeStr(timeStr);
+  }
   if (messageCaptionRemoveTime_ms <= actualTime_ms) messageCaption->Hide();
 
   if (GetGameConfig().display_radar) {

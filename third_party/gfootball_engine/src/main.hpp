@@ -74,6 +74,7 @@ class GameConfig {
   int render_resolution_x = 1280;
   int render_resolution_y = 720;
   bool display_radar = true;
+  bool display_scoreboard = true;
   std::string updatePath(const std::string& path) {
 #ifdef WIN32
     boost::filesystem::path boost_path(path);

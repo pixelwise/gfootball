@@ -188,8 +188,8 @@ class Match {
 
     std::vector<MentalImage> mentalImages; // [index] == index * 10 ms ago ([0] == now)
 
-    Gui2ScoreBoard *scoreboard;
-    Gui2Radar *radar;
+    Gui2ScoreBoard *scoreboard = nullptr;
+    Gui2Radar *radar = nullptr;
     Gui2Caption *messageCaption;
     unsigned long messageCaptionRemoveTime_ms = 0;
     unsigned long matchTime_ms = 0;
