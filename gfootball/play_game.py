@@ -30,6 +30,8 @@ import yaml
 from absl import app
 from absl import flags
 from absl import logging
+from pydantic import BaseModel
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
 
@@ -48,6 +50,10 @@ class Scenario(str, Enum):
   HARD = "11_vs_11_hard_stochastic"
   ACADEMY_3_VS_1 = "academy_3_vs_1_with_keeper"
   ACADEMY_CORNER = "academy_corner"
+
+
+class DisplaySettings(BaseModel):
+  radar: bool = True
 
 
 class GameConfig(BaseSettings):
@@ -69,6 +75,7 @@ class GameConfig(BaseSettings):
   video_quality_level: int = 0
   write_video: bool = True
   game_engine_random_seed: int = 48
+  display_settings: DisplaySettings = Field(default_factory=DisplaySettings)
 
   @classmethod
   def from_yaml(cls, path: str):

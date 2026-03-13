@@ -97,7 +97,10 @@ class Config(object):
         'tracesdir': os.path.join(tempfile.gettempdir(), 'dumps'),
         'video_format': 'avi',
         'video_quality_level': 0,  # 0 - low, 1 - medium, 2 - high
-        'write_video': False
+        'write_video': False,
+        'display_settings': {
+          'radar': True,
+        },
     }
     self._values['render_resolution_y'] = int(
         0.5625 * self._values['render_resolution_x'])

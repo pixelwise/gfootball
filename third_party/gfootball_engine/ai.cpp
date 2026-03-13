@@ -163,7 +163,9 @@ BOOST_PYTHON_MODULE(_gameplayfootball) {
       .def_readwrite("render_resolution_x",
                      &GameConfig::render_resolution_x)
       .def_readwrite("render_resolution_y",
-                     &GameConfig::render_resolution_y);
+                     &GameConfig::render_resolution_y)
+      .def_readwrite("display_radar",
+                     &GameConfig::display_radar);
 
   class_<ScenarioConfig, SHARED_PTR<ScenarioConfig>, boost::noncopyable>(
       "ScenarioConfig", no_init)
