@@ -1,0 +1,16 @@
+action_set: "full"
+players: ""
+level: "11_vs_11_stochastic"
+custom_display_stats: null
+display_game_stats: false
+dump_full_episodes: true
+dump_scores: false
+physics_steps_per_frame: 10
+render_resolution_x: 1280
+render_resolution_y: 720
+real_time: false
+tracesdir: "/tmp/dumps"
+video_format: "avi"
+video_quality_level: 0
+write_video: true
+game_engine_random_seed: 42
