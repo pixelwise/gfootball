@@ -187,6 +187,8 @@ setup(
         'numpy',
         'gym<=0.21.0',
         'absl-py',
+        'pydantic-settings',
+        'pyyaml',
         'wheel',
     ],
     include_package_data=True,

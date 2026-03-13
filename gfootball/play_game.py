@@ -18,41 +18,97 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from datetime import datetime
+from pathlib import Path
+from typing import Literal
+from typing import Optional
+from enum import Enum
+
+import tempfile
+import yaml
 
 from absl import app
 from absl import flags
 from absl import logging
-
+from pydantic_settings import BaseSettings
+from pydantic_settings import SettingsConfigDict
 
 from gfootball.env import config
 from gfootball.env import football_env
 
+
+class ActionSet(str, Enum):
+    DEFAULT = "default"
+    FULL = "full"
+
+
+class Scenario(str, Enum):
+  STANDARD = "11_vs_11_stochastic"
+  EASY = "11_vs_11_easy_stochastic"
+  HARD = "11_vs_11_hard_stochastic"
+  ACADEMY_3_VS_1 = "academy_3_vs_1_with_keeper"
+  ACADEMY_CORNER = "academy_corner"
+
+
+class GameConfig(BaseSettings):
+  model_config = SettingsConfigDict(extra="ignore")
+
+  action_set: ActionSet = ActionSet.DEFAULT
+  players: str = ""
+  level: Scenario = Scenario.STANDARD
+  custom_display_stats: Optional[str] = None
+  display_game_stats: bool = True
+  dump_full_episodes: bool = True
+  dump_scores: bool = False
+  physics_steps_per_frame: int = 10
+  render_resolution_x: int = 1280
+  render_resolution_y: int = 720
+  real_time: bool = False
+  tracesdir: Path = Path(tempfile.gettempdir()) / "dumps"
+  video_format: Literal["avi", "webm"] = "avi"
+  video_quality_level: int = 0
+  write_video: bool = True
+  game_engine_random_seed: int = 48
+
+  @classmethod
+  def from_yaml(cls, path: str):
+    with open(path) as f:
+      data = yaml.safe_load(f)
+    return cls(**data)
+
+  def to_yaml(self, path: Path) -> None:
+    data = self.model_dump(mode="json")
+    with open(path, "w") as f:
+      yaml.safe_dump(data, f, sort_keys=False)
+
+  def with_dynamic_tracesdir(self) -> "GameConfig":
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    dynamic_path = self.tracesdir / f"episode-{timestamp}"
+    return self.model_copy(update={"tracesdir": dynamic_path})
+
+
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string('players', 'keyboard:left_players=1',
-                    'Semicolon separated list of players, single keyboard '
-                    'player on the left by default')
-flags.DEFINE_string('level', '', 'Level to play')
-flags.DEFINE_enum('action_set', 'default', ['default', 'full'], 'Action set')
-flags.DEFINE_bool('real_time', True,
-                  'If true, environment will slow down so humans can play.')
+flags.DEFINE_string('config_file', None, 'Path to YAML configuration file')
 flags.DEFINE_bool('render', True, 'Whether to do game rendering.')
 
 
 def main(_):
-  players = FLAGS.players.split(';') if FLAGS.players else ''
-  assert not (any(['agent' in player for player in players])
-             ), ('Player type \'agent\' can not be used with play_game.')
-  cfg_values = {
-      'action_set': FLAGS.action_set,
-      'dump_full_episodes': True,
-      'players': players,
-      'real_time': FLAGS.real_time,
-  }
-  if FLAGS.level:
-    cfg_values['level'] = FLAGS.level
-  cfg = config.Config(cfg_values)
-  env = football_env.FootballEnv(cfg)
+
+  if FLAGS.config_file:
+      cfg = GameConfig.from_yaml(FLAGS.config_file)
+  else:
+      cfg = GameConfig()
+
+  cfg = cfg.with_dynamic_tracesdir()
+  cfg.tracesdir.mkdir(parents=True, exist_ok=True)
+
+  cfg.to_yaml(cfg.tracesdir / "config.yaml")
+
+  cfg_values = cfg.model_dump()
+  env_cfg = config.Config(cfg_values)
+  env = football_env.FootballEnv(env_cfg)
+
   if FLAGS.render:
     env.render()
   env.reset()
