@@ -37,6 +37,7 @@ from pydantic_settings import SettingsConfigDict
 
 from gfootball.env import config
 from gfootball.env import football_env
+from gfootball.env.football_env_core import CameraType
 
 
 class ActionSet(str, Enum):
@@ -63,6 +64,7 @@ class GameConfig(BaseSettings):
   action_set: ActionSet = ActionSet.DEFAULT
   players: str = ""
   level: Scenario = Scenario.STANDARD
+  camera: CameraType = CameraType.WIDE
   custom_display_stats: Optional[str] = None
   display_game_stats: bool = True
   dump_full_episodes: bool = True

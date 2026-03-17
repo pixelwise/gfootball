@@ -91,6 +91,7 @@ class Config(object):
         'dump_scores': False,
         'players': ['agent:left_players=1'],
         'level': '11_vs_11_stochastic',
+        'camera': 'wide',
         'physics_steps_per_frame': 10,
         'render_resolution_x': 1280,
         'real_time': False,

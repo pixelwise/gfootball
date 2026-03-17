@@ -167,7 +167,9 @@ BOOST_PYTHON_MODULE(_gameplayfootball) {
       .def_readwrite("display_radar",
                      &GameConfig::display_radar)
       .def_readwrite("display_scoreboard",
-                     &GameConfig::display_scoreboard);
+                     &GameConfig::display_scoreboard)
+      .def_readwrite("camera",
+                     &GameConfig::camera);
 
   class_<ScenarioConfig, SHARED_PTR<ScenarioConfig>, boost::noncopyable>(
       "ScenarioConfig", no_init)
@@ -228,6 +230,11 @@ BOOST_PYTHON_MODULE(_gameplayfootball) {
       .value("e_PlayerRole_RM", e_PlayerRole::e_PlayerRole_RM)
       .value("e_PlayerRole_AM", e_PlayerRole::e_PlayerRole_AM)
       .value("e_PlayerRole_CF", e_PlayerRole::e_PlayerRole_CF);
+
+  enum_<CameraType>("CameraType")
+      .value("WIDE", CameraType::WIDE)
+      .value("BIRD_EYE", CameraType::BIRD_EYE)
+      .value("TELE", CameraType::TELE);
 
   enum_<e_RenderingMode>("e_RenderingMode")
       .value("e_Disabled", e_RenderingMode::e_Disabled)

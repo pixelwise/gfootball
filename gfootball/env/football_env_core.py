@@ -20,6 +20,7 @@ from __future__ import division
 from __future__ import print_function
 
 from absl import logging
+from enum import Enum
 
 import copy
 
@@ -56,6 +57,19 @@ class EnvState(object):
     self.prev_ball_owned_team = -1
 
 
+class CameraType(str, Enum):
+    WIDE = "wide"
+    BIRD_EYE = "bird-eye"
+    TELE = "tele"
+
+
+CAMERA_MAP = {
+    CameraType.WIDE: libgame.CameraType.WIDE,
+    CameraType.BIRD_EYE: libgame.CameraType.BIRD_EYE,
+    CameraType.TELE: libgame.CameraType.TELE,
+}
+
+
 class FootballEnvCore(object):
 
   def __init__(self, config):
@@ -79,6 +93,7 @@ class FootballEnvCore(object):
     env.game_config.render_resolution_y = self._config['render_resolution_y']
     env.game_config.display_radar = self._config['display_settings']['radar']
     env.game_config.display_scoreboard = self._config['display_settings']['scoreboard']
+    env.game_config.camera = CAMERA_MAP[self._config['camera']]
     return env
 
   def _reset(self, animations, inc):

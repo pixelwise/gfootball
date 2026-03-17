@@ -17,3 +17,4 @@ game_engine_random_seed: 42
 display_settings:
   radar: true
   scoreboard: true
+camera: "wide"

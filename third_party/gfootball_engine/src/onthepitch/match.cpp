@@ -571,12 +571,11 @@ void Match::UpdateIngameCamera() {
 
   // normal cam
 
-  int camMethod = 1; // 1 == wide, 2 == birds-eye, 3 == tele
 
   if (!IsGoalScored() || (IsGoalScored() && goalScoredTimer < 1000)) {
     DO_VALIDATION;
 
-    if (camMethod == 1) {
+    if (GetGameConfig().camera == CameraType::WIDE) {
       DO_VALIDATION;
 
       // wide cam
@@ -601,7 +600,7 @@ void Match::UpdateIngameCamera() {
       cameraNearCap = cameraNodePosition.coords[2];
       cameraFarCap = 200;
 
-    } else if (camMethod == 2) {
+    } else if (GetGameConfig().camera == CameraType::BIRD_EYE) {
       DO_VALIDATION;
 
       // birds-eye cam
@@ -613,7 +612,7 @@ void Match::UpdateIngameCamera() {
       cameraNearCap = 40 + height - 5;
       cameraFarCap = 250;//65 + height * 1.2; doesn't work wtf?
 
-    } else if (camMethod == 3) {
+    } else if (GetGameConfig().camera == CameraType::TELE) {
       DO_VALIDATION;
 
       // tele cam

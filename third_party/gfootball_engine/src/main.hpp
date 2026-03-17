@@ -60,6 +60,14 @@ enum e_RenderingMode {
   e_Offscreen
 };
 
+
+enum class CameraType {
+    WIDE,
+    BIRD_EYE,
+    TELE
+};
+
+
 class GameConfig {
  public:
   static SHARED_PTR<GameConfig> make() {
@@ -75,6 +83,7 @@ class GameConfig {
   int render_resolution_y = 720;
   bool display_radar = true;
   bool display_scoreboard = true;
+  CameraType camera = CameraType::WIDE;
   std::string updatePath(const std::string& path) {
 #ifdef WIN32
     boost::filesystem::path boost_path(path);
