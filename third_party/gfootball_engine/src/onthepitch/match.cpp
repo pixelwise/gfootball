@@ -626,6 +626,35 @@ void Match::UpdateIngameCamera() {
       cameraFOV = 15.0f;
       cameraNearCap = 50 + zoom * 10.0f;
       cameraFarCap = 300;
+
+    } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_0) {
+      DO_VALIDATION;
+
+      // side cam, sligtly panned to the left
+
+      cameraOrientation.SetAngleAxis(0.32f * pi, Vector3(1, 0, 0));
+      cameraNodeOrientation.SetAngleAxis(0.3f * pi, Vector3(0, 0, 1));
+
+      cameraNodePosition = Vector3(0, -45.0f, 15.0f);
+
+      cameraFOV = 90.0f;
+      cameraNearCap = 5.0f;
+      cameraFarCap = 300.0f;
+
+    } else if (GetGameConfig().camera == CameraType::STATIC_GOAL_0) {
+      DO_VALIDATION;
+
+      // goal cam, sligtly panned to the left
+
+      cameraOrientation.SetAngleAxis(0.32f * pi, Vector3(1, 0, 0));
+      cameraNodeOrientation.SetAngleAxis(1.8f * pi, Vector3(0, 0, 1));
+
+      cameraNodePosition = Vector3(-60.0f, 0, 15.0f);
+
+      cameraFOV = 90.0f;
+      cameraNearCap = 5.0f;
+      cameraFarCap = 300.0f;
+
     }
 
   } else {

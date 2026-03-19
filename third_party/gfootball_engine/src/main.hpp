@@ -64,7 +64,9 @@ enum e_RenderingMode {
 enum class CameraType {
     WIDE,
     BIRD_EYE,
-    TELE
+    TELE,
+    STATIC_SIDE_0,
+    STATIC_GOAL_0,
 };
 
 
