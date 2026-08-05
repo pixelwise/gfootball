@@ -13,8 +13,10 @@ tracesdir: "/tmp/dumps"
 video_format: "avi"
 video_quality_level: 0
 write_video: true
+write_segmentation_video: true
 game_engine_random_seed: 42
 display_settings:
   radar: true
   scoreboard: true
+  player_names: true
 camera: "wide"
