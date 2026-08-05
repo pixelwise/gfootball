@@ -56,7 +56,10 @@ uv sync --locked --no-install-project --python "${GFOOTBALL_PYTHON}"
 
 echo "▶ Building and installing gfootball..."
 export GFOOTBALL_BUILD_PYTHON="${PROJECT_DIR}/.venv/bin/python"
-uv sync --locked --python "${GFOOTBALL_PYTHON}"
+# Native build outputs live in the source tree and can be removed independently
+# of the editable package metadata (for example, by `git clean -x`). Force uv to
+# rerun the project's build hook so a missing engine is always rebuilt.
+uv sync --locked --python "${GFOOTBALL_PYTHON}" --reinstall-package gfootball
 
 echo "▶ Verifying Python and native engine imports..."
 uv run --locked python -c 'import gfootball; import gfootball_engine; print("✅ gfootball environment is ready")'
