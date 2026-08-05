@@ -7,6 +7,9 @@ __pycache__
 dist/
 # virtual environment
 football-env*/
+.venv/
+gfootball_engine
+third_party/gfootball_engine/fonts/
 
 # CMake related directories and files
 third_party/gfootball_engine/build*

@@ -1,0 +1,32 @@
+[build-system]
+requires = [
+  "setuptools>=64,<81",
+  "wheel",
+  "psutil",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gfootball"
+version = "2.10.3"
+description = "Google Research Football - RL environment based on open-source game Gameplay Football"
+readme = "README.md"
+requires-python = ">=3.9,<3.11"
+license = "Apache-2.0"
+keywords = ["gfootball", "reinforcement-learning", "python", "machine learning"]
+dependencies = [
+  "pygame>=1.9.6",
+  "opencv-python<5",
+  "psutil",
+  "numpy<2.1",
+  "gym==0.17.3",
+  "absl-py",
+  "pydantic-settings<2.12",
+  "pyyaml",
+  "six",
+  "wheel",
+]
+
+
+[tool.uv]
+package = true

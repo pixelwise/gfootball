@@ -147,12 +147,22 @@ python3 -m pip install .
 
 ## Development mode
 
-You can install Google Research Football
-in the [development](https://packaging.python.org/guides/distributing-packages-using-setuptools/#id66)
-(aka editable) mode by running:
+The repository uses uv for its Python development environment. From the
+repository root, run:
 
 ```shell
-python3 -m pip install -e .
+./build-uv.sh
+```
+
+This installs uv when necessary, synchronizes the locked `.venv`, and installs
+Google Research Football in editable mode while compiling the native engine.
+The default Python 3.9/native prefix is
+`/home/artem/miniconda3/envs/gfootball`. Override it when needed:
+
+```shell
+GFOOTBALL_PYTHON=/path/to/python3.9 \
+GFOOTBALL_NATIVE_PREFIX=/path/to/native/prefix \
+./build-uv.sh
 ```
 
 In such case, Python source files can be edited in-place without reinstallation,

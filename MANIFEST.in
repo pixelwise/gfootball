@@ -4,7 +4,7 @@ recursive-include gfootball/doc *
 recursive-include gfootball/eval_server/proto *
 recursive-include gfootball/examples *
 
-include Dockerfile Dockerfile_examples .dockerignore CHANGELOG CONTRIBUTING.md requirements.txt run_docker_test.sh
+include Dockerfile Dockerfile_examples .dockerignore .python-version CHANGELOG CONTRIBUTING.md requirements.txt run_docker_test.sh build-uv.sh pyproject.toml uv.lock
 
 recursive-include third_party/fonts *
 recursive-include third_party/gfootball_engine *

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.5)
 
 if(WIN32)
   # Check for required Environment variables
@@ -67,7 +67,7 @@ include_directories(${SDL2_GFX_DIRS})
 
 if(UNIX)
   if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.12")
-    find_package(Python COMPONENTS Development REQUIRED)
+    find_package(Python COMPONENTS Interpreter Development REQUIRED)
   else()
     # Starting from CMake 3.12 FindPythonLibs was deprecated in favour of FindPython.
     # But Ubuntu 18.04 and other older distributions are shipped with CMake version < 3.12,

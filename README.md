@@ -74,25 +74,24 @@ git clone https://github.com/google-research/football.git
 cd football
 ```
 
-Optionally you can use [virtual environment](https://docs.python.org/3/tutorial/venv.html):
+For this checkout, create the Python environment, install dependencies, and
+build the game engine with the uv setup script:
 
 ```shell
-python3 -m venv football-env
-source football-env/bin/activate
+./build-uv.sh
 ```
+The script installs uv if necessary and creates a locked `.venv`. It defaults
+to the Python 3.9/native toolchain in
+`/home/artem/miniconda3/envs/gfootball`; set `GFOOTBALL_PYTHON` and
+`GFOOTBALL_NATIVE_PREFIX` to use an equivalent toolchain elsewhere.
 
-Next, build the game engine and install dependencies:
-
-```shell
-python3 -m pip install .
-```
 This command can run for a couple of minutes, as it compiles the C++ environment in the background.
 If you face any problems, first check [Compiling Engine](gfootball/doc/compile_engine.md) documentation and search GitHub issues.
 
 
 #### 3. Time to play!
 ```shell
-python3 -m gfootball.play_game --action_set=full
+uv run python -m gfootball.play_game --action_set=full
 ```
 Make sure to check out the [keyboard mappings](#keyboard-mappings).
 To quit the game press Ctrl+C in the terminal.

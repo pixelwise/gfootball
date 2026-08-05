@@ -43,10 +43,8 @@ class CustomBuild(build_ext):
     super(CustomBuild, self).run()
 
   def run_unix(self):
-    if os.path.exists(self.build_lib):
-      dest_dir = os.path.join(self.build_lib, 'gfootball_engine')
-    else:
-      # For the development install (pip install -e .)
+    if self.inplace or 'editable_wheel' in sys.argv:
+      # For development installs (legacy `develop` or PEP 660 editable wheel),
       # gfootball_engine module has to be located in the project root directory.
       dest_dir = "gfootball_engine"
       if not os.path.exists(dest_dir):
@@ -55,6 +53,8 @@ class CustomBuild(build_ext):
         except:
           raise OSError("Google Research Football: Could not create symlink to %s"
                         "for the development install." % dest_dir)
+    else:
+      dest_dir = os.path.join(self.build_lib, 'gfootball_engine')
 
     try:
       use_prebuilt_lib = int(os.environ.get('GFOOTBALL_USE_PREBUILT_SO', '0'))
@@ -134,65 +134,29 @@ def copy_fonts(dest_dir):
 
 def process_develop_setup():
   """
-  Clean up (if necessary) some directories before or after running
-  setup in development (a.k.a. editable) mode (`pip install -e .`).
+  Clean up stale regular-build output before an editable installation.
+
+  The source-tree gfootball_engine link belongs to the editable environment.
+  Keep it in place during wheel builds so building a distribution does not
+  break an active development environment.
   """
-  if 'develop' in sys.argv and os.path.exists('build'):
-    # Remove `build` directory created by a regular installation
+  development_install = ('develop' in sys.argv or
+                         'editable_wheel' in sys.argv)
+  if development_install and os.path.exists('build'):
+    # Remove `build` directory created by a regular installation.
     shutil.rmtree('build')
-  elif 'develop' not in sys.argv and os.path.exists('gfootball_engine'):
-    # If `pip install .` is called after development mode,
-    # remove the 'fonts' directory copied by a `develop` setup
-    copied_fonts = 'third_party/gfootball_engine/fonts'
-    if os.path.exists(copied_fonts):
-      shutil.rmtree(copied_fonts)
-    # Remove .so files (.pyd on Windows)
-    for empty_lib in glob.glob("brainball_cpp_engine*"):
-      os.remove(empty_lib)
-    # Finally, remove symlink to the gfootball_engine directory
-    if not os.path.exists('gfootball_engine'):
-      return
-    if os.path.islink('gfootball_engine'):
-      if platform.system() == 'Windows':
-        os.remove('gfootball_engine')
-      else:
-        os.unlink('gfootball_engine')
-    else:
-      shutil.rmtree('gfootball_engine')
 
 
 # TODO: Add CI tests for develop setup on all platforms
 process_develop_setup()
-packages = find_packages() + find_packages('third_party')
+packages = find_packages(
+    exclude=['gfootball_engine', 'gfootball_engine.*']) + find_packages(
+        'third_party')
 
 setup(
-    name='gfootball',
-    version='2.10.3',
-    description=('Google Research Football - RL environment based on '
-                 'open-source game Gameplay Football'),
-    long_description=('Please see [our GitHub page](https://github.com/google-research/football) '
-                      'for details.'),
-    long_description_content_type='text/markdown',
-    author='Google LLC',
-    author_email='no-reply@google.com',
-    url='https://github.com/google-research/football',
-    license='Apache 2.0',
     packages=packages,
     package_dir={'gfootball_engine': 'third_party/gfootball_engine'},
-    # If you change the requirements here please don't forget to change the requirements.txt too
-    install_requires=[
-        'pygame>=1.9.6',
-        'opencv-python',
-        'psutil',
-        'numpy',
-        'gym<=0.21.0',
-        'absl-py',
-        'pydantic-settings',
-        'pyyaml',
-        'wheel',
-    ],
     include_package_data=True,
-    keywords='gfootball reinforcement-learning python machine learning',
     ext_modules=[CMakeExtension('brainball_cpp_engine')],
     cmdclass={'build_ext': CustomBuild},
 )
