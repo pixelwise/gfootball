@@ -109,10 +109,6 @@ void OpenGLRenderer3D::RenderOverlay2D(
     const std::vector<Overlay2DQueueEntry> &overlay2DQueue) {
   DO_VALIDATION;
 
-  if (overlay2DQueue.empty()) {
-    return;
-  }
-
   mapping.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   mapping.glEnable(GL_BLEND);
   mapping.glDisable(GL_DEPTH_TEST);

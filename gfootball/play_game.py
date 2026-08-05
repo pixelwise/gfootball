@@ -56,6 +56,7 @@ class Scenario(str, Enum):
 class DisplaySettings(BaseModel):
   radar: bool = True
   scoreboard: bool = True
+  player_names: bool = False
 
 
 class GameConfig(BaseSettings):

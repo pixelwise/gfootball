@@ -99,6 +99,8 @@ class FootballEnvCore(object):
         'write_segmentation_video']
     env.game_config.display_radar = self._config['display_settings']['radar']
     env.game_config.display_scoreboard = self._config['display_settings']['scoreboard']
+    env.game_config.display_player_names = self._config[
+        'display_settings'].get('player_names', True)
     env.game_config.camera = CAMERA_MAP[self._config['camera']]
     return env
 

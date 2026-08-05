@@ -179,6 +179,8 @@ BOOST_PYTHON_MODULE(_gameplayfootball) {
                      &GameConfig::display_radar)
       .def_readwrite("display_scoreboard",
                      &GameConfig::display_scoreboard)
+      .def_readwrite("display_player_names",
+                     &GameConfig::display_player_names)
       .def_readwrite("camera",
                      &GameConfig::camera);
 

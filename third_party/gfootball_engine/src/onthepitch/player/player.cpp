@@ -106,7 +106,7 @@ void Player::Activate(boost::intrusive_ptr<Node> humanoidSourceNode,
   controller.reset(new ElizaController(match, lazyPlayer));
   CastController()->SetPlayer(this);
   buf_nameCaptionShowCondition = false;
-  nameCaption->Show();
+  nameCaption->Hide();
   CastHumanoid()->ResetPosition(
       GetFormationEntry().position * 25 *
           Vector3(-team->GetDynamicSide(), -team->GetDynamicSide(), 0),
@@ -344,7 +344,10 @@ void Player::PreparePutBuffers() {
   DO_VALIDATION;
   PlayerBase::PreparePutBuffers();
   buf_nameCaptionShowCondition = ExternalControllerActive();
-  if (team->GetHumanGamerCount() == 0) buf_nameCaptionShowCondition = team->GetDesignatedTeamPossessionPlayer() == this;
+  if (team->GetHumanGamerCount() == 0) {
+    buf_nameCaptionShowCondition =
+        team->GetDesignatedTeamPossessionPlayer() == this;
+  }
   e_PlayerColor playerColor = team->GetPlayerColor(this);
     switch (playerColor) {
       case e_PlayerColor_Green:
@@ -388,7 +391,7 @@ void Player::FetchPutBuffers() {
 
 void Player::Put2D(bool mirror) {
   DO_VALIDATION;
-  if (buf_nameCaptionShowCondition) {
+  if (GetGameConfig().display_player_names && buf_nameCaptionShowCondition) {
     DO_VALIDATION;
     Vector3 captionPos3D = GetGeomPosition();
     if (mirror) {

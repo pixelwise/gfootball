@@ -87,6 +87,7 @@ class GameConfig {
   int render_resolution_y = 720;
   bool display_radar = true;
   bool display_scoreboard = true;
+  bool display_player_names = true;
   CameraType camera = CameraType::WIDE;
   std::string updatePath(const std::string& path) {
 #ifdef WIN32
