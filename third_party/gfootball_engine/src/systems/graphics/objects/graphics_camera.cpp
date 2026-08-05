@@ -18,6 +18,7 @@
 #include "graphics_camera.hpp"
 
 #include "../../../systems/graphics/rendering/r3d_messages.hpp"
+#include "../../../main.hpp"
 
 #include "../graphics_scene.hpp"
 #include "../graphics_system.hpp"
@@ -140,6 +141,9 @@ void GraphicsCamera::SetPosition(const Vector3 &newPosition) {
       std::deque<VertexBufferQueueEntry>::iterator visibleGeometryBufferIter = buffer->visibleGeometry.end();
       visibleGeometryBufferIter--;
       (*visibleGeometryBufferIter).aabb = (*visibleGeometryIter)->GetAABB();
+      (*visibleGeometryBufferIter).is_player =
+          (*visibleGeometryIter)->PropertyExists("semantic_class") &&
+          (*visibleGeometryIter)->GetProperty("semantic_class") == "player";
 
       visibleGeometryIter++;
     }
@@ -242,6 +246,39 @@ void GraphicsCamera::SetPosition(const Vector3 &newPosition) {
     }
 
     std::vector<e_TargetAttachment> targets;
+
+    if (GetGameConfig().render_segmentation) {
+      renderer->BindFrameBuffer(0);
+      targets.push_back(e_TargetAttachment_Back);
+      renderer->SetRenderTargets(targets);
+      targets.clear();
+      renderer->SetViewport(view.x, height - (view.y + view.height),
+                            view.width, view.height);
+      renderer->UseShader("zphase");
+      renderer->SetMatrix("projectionMatrix", projectionMatrix);
+      renderer->SetMatrix("viewMatrix", viewMatrix);
+      renderer->SetCullingMode(e_CullingMode_Back);
+      renderer->SetBlendingMode(e_BlendingMode_Off);
+      renderer->SetDepthFunction(e_DepthFunction_Less);
+      renderer->SetDepthTesting(true);
+      renderer->SetDepthMask(true);
+      renderer->ClearBuffer(Vector3(0, 0, 0), true, true);
+      renderer->SetColorMask(false, false, false, false);
+      renderer->RenderVertexBuffer(buffer.visibleGeometry,
+                                   e_RenderMode_GeometryOnly);
+      std::deque<VertexBufferQueueEntry> playerGeometry;
+      for (const auto &geometry : buffer.visibleGeometry) {
+        if (geometry.is_player) {
+          playerGeometry.push_back(geometry);
+        }
+      }
+      renderer->SetColorMask(true, true, true, true);
+      renderer->SetDepthFunction(e_DepthFunction_Equal);
+      renderer->SetDepthMask(false);
+      renderer->RenderVertexBuffer(playerGeometry, e_RenderMode_GeometryOnly);
+      renderer->SetDepthMask(true);
+      renderer->CaptureSegmentationScreen();
+    }
 
 
     // render skybox

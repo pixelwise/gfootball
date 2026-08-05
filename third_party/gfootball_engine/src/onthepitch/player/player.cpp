@@ -101,6 +101,8 @@ void Player::Activate(boost::intrusive_ptr<Node> humanoidSourceNode,
       this, humanoidSourceNode, fullbodySourceNode, colorCoords, animCollection,
       GetTeam()->GetSceneNode(), kit));
 
+  CastHumanoid()->MarkAsPlayerGeometry();
+
   controller.reset(new ElizaController(match, lazyPlayer));
   CastController()->SetPlayer(this);
   buf_nameCaptionShowCondition = false;

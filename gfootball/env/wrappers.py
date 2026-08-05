@@ -69,6 +69,7 @@ class PeriodicDumpWriter(gym.Wrapper):
     self._render = render
     self._original_dump_config = {
         'write_video': env._config['write_video'],
+        'write_segmentation_video': env._config['write_segmentation_video'],
         'dump_full_episodes': env._config['dump_full_episodes'],
         'dump_scores': env._config['dump_scores'],
     }
@@ -85,6 +86,7 @@ class PeriodicDumpWriter(gym.Wrapper):
         self.env.render()
     else:
       self.env._config.update({'write_video': False,
+                               'write_segmentation_video': False,
                                'dump_full_episodes': False,
                                'dump_scores': False})
       if self._render:

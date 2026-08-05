@@ -77,6 +77,8 @@ class GameConfig {
   }
   // Is rendering enabled.
   bool render = false;
+  // Whether to render a player-only semantic segmentation frame.
+  bool render_segmentation = false;
   // Directory with textures and other resources.
   std::string data_dir;
   // How many physics animation steps are done per single environment step.

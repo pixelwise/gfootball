@@ -95,6 +95,8 @@ class FootballEnvCore(object):
         'physics_steps_per_frame']
     env.game_config.render_resolution_x = self._config['render_resolution_x']
     env.game_config.render_resolution_y = self._config['render_resolution_y']
+    env.game_config.render_segmentation = self._config[
+        'write_segmentation_video']
     env.game_config.display_radar = self._config['display_settings']['radar']
     env.game_config.display_scoreboard = self._config['display_settings']['scoreboard']
     env.game_config.camera = CAMERA_MAP[self._config['camera']]
@@ -216,7 +218,9 @@ class FootballEnvCore(object):
       if self._retrieve_observation():
         break
       if 'frame' in self._observation:
-        self._trace.add_frame(self._observation['frame'])
+        self._trace.add_frame(
+            self._observation['frame'],
+            self._observation.get('segmentation_frame'))
     debug['frame_cnt'] = self._step
 
     # Finish the episode on score.
@@ -314,6 +318,32 @@ class FootballEnvCore(object):
       frame = np.transpose(frame, [1, 2, 0])
       frame = np.flip(frame, 0)
       result['frame'] = frame
+      if self._config['write_segmentation_video']:
+        segmentation_frame = self._env.get_segmentation_frame()
+        segmentation_frame = np.frombuffer(segmentation_frame, dtype=np.uint8)
+        expected_size = (self._config['render_resolution_x'] *
+                         self._config['render_resolution_y'] * 3)
+        if segmentation_frame.size == expected_size:
+          segmentation_frame = np.reshape(segmentation_frame, [
+              self._config['render_resolution_x'],
+              self._config['render_resolution_y'], 3
+          ])
+          segmentation_frame = np.reshape(
+              np.concatenate([
+                  segmentation_frame[:, :, 0],
+                  segmentation_frame[:, :, 1],
+                  segmentation_frame[:, :, 2]
+              ]), [
+                  3, self._config['render_resolution_y'],
+                  self._config['render_resolution_x']
+              ])
+          segmentation_frame = np.transpose(segmentation_frame, [1, 2, 0])
+          segmentation_frame = np.flip(segmentation_frame, 0)
+        else:
+          segmentation_frame = np.zeros((
+              self._config['render_resolution_y'],
+              self._config['render_resolution_x'], 3), dtype=np.uint8)
+        result['segmentation_frame'] = segmentation_frame
     result['ball'] = np.array(
         [info.ball_position[0], info.ball_position[1], info.ball_position[2]])
     # Ball's movement direction represented as [x, y] distance per step.

@@ -198,6 +198,17 @@ HumanoidBase::~HumanoidBase() {
   // the other full body mesh ref is connected to a geometry object which has taken over ownership and will clean it up
 }
 
+void HumanoidBase::MarkAsPlayerGeometry() {
+  DO_VALIDATION;
+  std::list<boost::intrusive_ptr<Geometry> > playerGeometry;
+  humanoidNode->GetObjects<Geometry>(e_ObjectType_Geometry, playerGeometry);
+  fullbodyNode->GetObjects<Geometry>(e_ObjectType_Geometry, playerGeometry);
+  playerGeometry.push_back(hairStyle);
+  for (auto &geometry : playerGeometry) {
+    geometry->SetProperty("semantic_class", "player");
+  }
+}
+
 void HumanoidBase::Mirror() {
   // fullbodyNode - mirror for ball collision and render.
   humanoidNode->SetPosition(humanoidNode->GetPosition() * Vector3(-1, -1, 1),

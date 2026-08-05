@@ -47,6 +47,12 @@ except ImportError:
   import cv2
 
 
+def resize_segmentation_frame(frame, frame_dim):
+  """Resizes a segmentation frame while preserving its binary labels."""
+  frame = cv2.resize(frame, frame_dim, interpolation=cv2.INTER_NEAREST)
+  return np.where(frame > 127, 255, 0).astype(np.uint8)
+
+
 class DumpConfig(object):
 
   def __init__(self,
@@ -211,20 +217,24 @@ class ActiveDump(object):
     self._video_fd = None
     self._video_tmp = None
     self._video_writer = None
+    self._segmentation_video_fd = None
+    self._segmentation_video_tmp = None
+    self._segmentation_video_writer = None
     self._frame_dim = None
     self._step_cnt = 0
     self._dump_file = None
+    if config['write_video'] or config['write_segmentation_video']:
+      self._frame_dim = (
+          config['render_resolution_x'], config['render_resolution_y'])
+      if config['video_quality_level'] not in [1, 2]:
+        # Reduce resolution to (800, 450).
+        self._frame_dim = min(self._frame_dim, (800, 450))
     if config['write_video']:
       video_format = config['video_format']
       assert video_format in ['avi', 'webm']
       self._video_suffix = '.%s' % video_format
       self._video_fd, self._video_tmp = tempfile.mkstemp(
           suffix=self._video_suffix)
-      self._frame_dim = (
-          config['render_resolution_x'], config['render_resolution_y'])
-      if config['video_quality_level'] not in [1, 2]:
-        # Reduce resolution to (800, 450).
-        self._frame_dim = min(self._frame_dim, (800, 450))
       if video_format == 'avi':
         if config['video_quality_level'] == 2:
           fcc = cv2.VideoWriter_fourcc('p', 'n', 'g', ' ')
@@ -239,17 +249,29 @@ class ActiveDump(object):
           self._video_tmp, fcc,
           const.PHYSICS_STEPS_PER_SECOND / config['physics_steps_per_frame'],
           self._frame_dim)
+    if config['write_segmentation_video']:
+      self._segmentation_video_fd, self._segmentation_video_tmp = \
+          tempfile.mkstemp(suffix='.avi')
+      mask_fcc = cv2.VideoWriter_fourcc('p', 'n', 'g', ' ')
+      self._segmentation_video_writer = cv2.VideoWriter(
+          self._segmentation_video_tmp, mask_fcc,
+          const.PHYSICS_STEPS_PER_SECOND / config['physics_steps_per_frame'],
+          self._frame_dim)
     if WRITE_FILES:
       self._dump_file = open(name + '.dump', 'wb')
 
   def __del__(self):
     self.finalize()
 
-  def add_frame(self, frame):
+  def add_frame(self, frame, segmentation_frame=None):
     if self._video_writer:
       frame = frame[..., ::-1]
       frame = cv2.resize(frame, self._frame_dim, interpolation=cv2.INTER_AREA)
       self._video_writer.write(frame)
+    if self._segmentation_video_writer and segmentation_frame is not None:
+      segmentation_frame = resize_segmentation_frame(
+          segmentation_frame, self._frame_dim)
+      self._segmentation_video_writer.write(segmentation_frame)
 
   def add_step(self, o):
     # Write video if requested.
@@ -322,11 +344,19 @@ class ActiveDump(object):
         for d in o._debugs:
           writer.write(d)
       self._video_writer.write(frame)
+    if self._segmentation_video_writer and 'segmentation_frame' in o:
+      segmentation_frame = resize_segmentation_frame(
+          o['segmentation_frame'], self._frame_dim)
+      self._segmentation_video_writer.write(segmentation_frame)
     # Write the dump.
     temp_frame = None
     if 'frame' in o._trace['observation']:
       temp_frame = o._trace['observation']['frame']
       del o._trace['observation']['frame']
+    temp_segmentation_frame = None
+    if 'segmentation_frame' in o._trace['observation']:
+      temp_segmentation_frame = o._trace['observation']['segmentation_frame']
+      del o._trace['observation']['segmentation_frame']
 
     # Add config to the first frame for our replay tools to use.
     if self._step_cnt == 0:
@@ -335,6 +365,8 @@ class ActiveDump(object):
     six.moves.cPickle.dump(o._trace, self._dump_file)
     if temp_frame is not None:
       o._trace['observation']['frame'] = temp_frame
+    if temp_segmentation_frame is not None:
+      o._trace['observation']['segmentation_frame'] = temp_segmentation_frame
     self._step_cnt += 1
 
   def finalize(self):
@@ -349,6 +381,18 @@ class ActiveDump(object):
           shutil.move(self._video_tmp, self._name + self._video_suffix)
         dump_info['video'] = '%s%s' % (self._name, self._video_suffix)
         logging.info('Video written to %s%s', self._name, self._video_suffix)
+      except:
+        logging.error(traceback.format_exc())
+    if self._segmentation_video_writer:
+      self._segmentation_video_writer.release()
+      self._segmentation_video_writer = None
+      os.close(self._segmentation_video_fd)
+      try:
+        segmentation_video = self._name + '_segmentation.avi'
+        if WRITE_FILES:
+          shutil.move(self._segmentation_video_tmp, segmentation_video)
+        dump_info['segmentation_video'] = segmentation_video
+        logging.info('Segmentation video written to %s', segmentation_video)
       except:
         logging.error(traceback.format_exc())
     if self._dump_file:
@@ -396,8 +440,8 @@ class ObservationState(object):
   def add_debug(self, text):
     self._debugs.append(text)
 
-  def add_frame(self, frame):
-    self._additional_frames.append(frame)
+  def add_frame(self, frame, segmentation_frame=None):
+    self._additional_frames.append((frame, segmentation_frame))
 
 
 class ObservationProcessor(object):
@@ -442,22 +486,29 @@ class ObservationProcessor(object):
   def __getitem__(self, key):
     return self._trace[key]
 
-  def add_frame(self, frame):
-    if len(self._trace) > 0 and self._config['write_video']:
-      self._trace[-1].add_frame(frame)
+  def add_frame(self, frame, segmentation_frame=None):
+    if len(self._trace) > 0 and (self._config['write_video'] or
+                                 self._config['write_segmentation_video']):
+      self._trace[-1].add_frame(frame, segmentation_frame)
       for dump in self.pending_dumps():
-        dump.add_frame(frame)
+        dump.add_frame(frame, segmentation_frame)
 
   def update(self, trace):
     self._frame += 1
-    frame = trace.get('frame', None)
-    if not self._config['write_video'] and 'frame' in trace['observation']:
-      # Don't record frame in the trace if we don't write video to save memory.
-      no_video_trace = trace
-      no_video_trace['observation'] = trace['observation'].copy()
-      del no_video_trace['observation']['frame']
-      self._state = ObservationState(no_video_trace)
-      frame = None
+    remove_frame = (not self._config['write_video'] and
+                    'frame' in trace['observation'])
+    remove_segmentation = (
+        not self._config['write_segmentation_video'] and
+        'segmentation_frame' in trace['observation'])
+    if remove_frame or remove_segmentation:
+      # Keep only pixel observations used by the requested video writers.
+      video_trace = trace.copy()
+      video_trace['observation'] = trace['observation'].copy()
+      if remove_frame:
+        del video_trace['observation']['frame']
+      if remove_segmentation:
+        del video_trace['observation']['segmentation_frame']
+      self._state = ObservationState(video_trace)
     else:
       self._state = ObservationState(trace)
     self._trace.append(self._state)
@@ -496,8 +547,8 @@ class ObservationProcessor(object):
         self._frame + config._steps_after, self._config)
     for step in list(self._trace)[-config._steps_before:]:
       config._active_dump.add_step(step)
-      for frame in step._additional_frames:
-        config._active_dump.add_frame(frame)
+      for frame, segmentation_frame in step._additional_frames:
+        config._active_dump.add_frame(frame, segmentation_frame)
     if config._steps_after == 0:
       # Synchronously finalize dump, so that crash dump is recorded.
       config._active_dump.finalize()

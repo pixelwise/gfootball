@@ -51,6 +51,7 @@ struct GameEnv {
 
   // Get the current rendered frame.
   screenshoot get_frame();
+  screenshoot get_segmentation_frame();
 
   // Executes the action inside the game.
   bool sticky_action_state(int action, bool left_team, int player);

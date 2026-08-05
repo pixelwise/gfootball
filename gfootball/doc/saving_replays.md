@@ -13,6 +13,9 @@ are controlled by the following set of flags:
 -  `write_video` - should a video be recorded together with the trace.
     If rendering is disabled (`render` config flag), the video contains a simple
     episode animation.
+-  `write_segmentation_video` - should a lossless companion AVI be recorded
+   with player pixels in white and all other pixels in black. The file is named
+   `<dump-name>_segmentation.avi` and requires rendering to be enabled.
 
 There are following scripts provided to operate on trace dumps:
 
@@ -27,4 +30,3 @@ You can change logging level by setting --verbosity flag to one of the following
 -  `-1` - warning, only warnings and above are logged when problems are encountered,
 -  `0` - info (the default), some per-episode statistics and similar are logged as well,
 -  `1` - debug, additional debugging messages are included.
-

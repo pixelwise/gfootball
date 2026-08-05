@@ -38,6 +38,13 @@ class GameEnv_Python : public GameEnv {
     return str;
   }
 
+  PyObject* get_segmentation_frame_python() {
+    ContextHolder c(this);
+    screenshoot screen = get_segmentation_frame();
+    PyObject* str = PyBytes_FromStringAndSize(screen.data(), screen.size());
+    return str;
+  }
+
   PyObject* get_state_python(const std::string& to_pickle) {
     std::string state = get_state(to_pickle);
     PyObject* str = PyBytes_FromStringAndSize(state.data(), state.size());
@@ -136,6 +143,8 @@ BOOST_PYTHON_MODULE(_gameplayfootball) {
       .def("start_game", &GameEnv_Python::start_game)
       .def("get_info", &GameEnv_Python::get_info)
       .def("get_frame", &GameEnv_Python::get_frame_python)
+      .def("get_segmentation_frame",
+           &GameEnv_Python::get_segmentation_frame_python)
       .def("perform_action", &GameEnv_Python::action)
       .def("sticky_action_state", &GameEnv_Python::sticky_action_state)
       .def("step", &GameEnv_Python::step_python)
@@ -158,6 +167,8 @@ BOOST_PYTHON_MODULE(_gameplayfootball) {
       .def("make", &GameConfig::make)
       .staticmethod("make")
       .def_readwrite("render", &GameConfig::render)
+      .def_readwrite("render_segmentation",
+                     &GameConfig::render_segmentation)
       .def_readwrite("physics_steps_per_frame",
                      &GameConfig::physics_steps_per_frame)
       .def_readwrite("render_resolution_x",

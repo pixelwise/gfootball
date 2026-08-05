@@ -16,8 +16,8 @@
 #pragma optimize(on)
 
 out vec4 stdout;
+uniform float isPlayer;
 
 void main(void) {
-  //gl_FragData[0] = vec4(0, 0, 0, 0);
-  stdout = vec4(0, 0, 0, 0);
+  stdout = vec4(isPlayer, isPlayer, isPlayer, 1.0);
 }

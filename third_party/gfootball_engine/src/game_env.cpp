@@ -132,6 +132,11 @@ screenshoot GameEnv::get_frame() {
   return GetGraphicsSystem()->GetScreen();
 }
 
+screenshoot GameEnv::get_segmentation_frame() {
+  SetGame(this);
+  return GetGraphicsSystem()->GetSegmentationScreen();
+}
+
 bool GameEnv::sticky_action_state(int action, bool left_team, int player) {
   SetGame(this);
   int controller_id = player + (left_team ? 0 : 11);

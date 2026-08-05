@@ -63,6 +63,7 @@ namespace blunted {
     AABB aabb;
     Vector3 position;
     Quaternion rotation;
+    bool is_player = false;
 
   };
 
@@ -220,6 +221,8 @@ namespace blunted {
       virtual void SetContext() = 0;
       virtual void DisableContext() = 0;
       virtual const screenshoot& GetScreen() = 0;
+      virtual const screenshoot& GetSegmentationScreen() = 0;
+      virtual void CaptureSegmentationScreen() = 0;
 
       virtual void SwapBuffers() = 0;
 
@@ -322,6 +325,11 @@ namespace blunted {
     virtual void SetContext() {}
     virtual void DisableContext() {}
     virtual const screenshoot& GetScreen() { DO_VALIDATION; return screen_; }
+    virtual const screenshoot& GetSegmentationScreen() {
+      DO_VALIDATION;
+      return segmentation_screen_;
+    }
+    virtual void CaptureSegmentationScreen() { DO_VALIDATION; }
     virtual ~MockRenderer3D() { DO_VALIDATION;};
 
     virtual void SwapBuffers() { DO_VALIDATION;};
@@ -414,6 +422,7 @@ namespace blunted {
     protected:
       View view_;
       screenshoot screen_;
+      screenshoot segmentation_screen_;
   };
 
 

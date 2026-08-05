@@ -49,6 +49,7 @@ namespace blunted {
       void SetContext();
       void DisableContext();
       const screenshoot& GetScreen();
+      const screenshoot& GetSegmentationScreen();
 
       e_SystemType GetSystemType() const;
 

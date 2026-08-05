@@ -67,6 +67,10 @@ const screenshoot &GraphicsSystem::GetScreen() {
   return renderer3DTask->GetScreen();
 }
 
+const screenshoot &GraphicsSystem::GetSegmentationScreen() {
+  return renderer3DTask->GetSegmentationScreen();
+}
+
 void GraphicsSystem::Exit() {
   DO_VALIDATION;
   delete task;

@@ -80,11 +80,21 @@ OpenGLRenderer3D::~OpenGLRenderer3D() {
 void OpenGLRenderer3D::SwapBuffers() {
   DO_VALIDATION;
   last_screen_.resize(context_width * context_height * 3);
+  // Capture the frame that was just rendered. Reading after the swap returns
+  // the previous front buffer on SDL and puts RGB one frame behind auxiliary
+  // render passes such as semantic segmentation.
+  mapping.glReadPixels(0, 0, context_width, context_height, GL_RGB,
+                       GL_UNSIGNED_BYTE, &last_screen_[0]);
   if (window) {
     SDL_GL_SwapWindow(window);
   }
-  mapping.glReadPixels(0, 0, context_width, context_height, GL_RGB, GL_UNSIGNED_BYTE,
-                       &last_screen_[0]);
+}
+
+void OpenGLRenderer3D::CaptureSegmentationScreen() {
+  DO_VALIDATION;
+  last_segmentation_screen_.resize(context_width * context_height * 3);
+  mapping.glReadPixels(0, 0, context_width, context_height, GL_RGB,
+                       GL_UNSIGNED_BYTE, &last_segmentation_screen_[0]);
 }
 
 void OpenGLRenderer3D::SetMatrix(const std::string &shaderUniformName,
@@ -1253,6 +1263,11 @@ void OpenGLRenderer3D::RenderVertexBuffer(
   while (vertexBufferQueueIter != vertexBufferQueue.end()) {
     DO_VALIDATION;
     const VertexBufferQueueEntry *queueEntry = &(*vertexBufferQueueIter);
+
+    if (currentShader->first == "zphase") {
+      SetUniformFloat("zphase", "isPlayer",
+                      queueEntry->is_player ? 1.0f : 0.0f);
+    }
 
     vertexBuffer = queueEntry->vertexBuffer->GetResource();
     if (currentBoundBuffer != vertexBuffer->GetVaoID()) {
@@ -2536,5 +2551,9 @@ void OpenGLRenderer3D::DisableContext() {
 
 const screenshoot &OpenGLRenderer3D::GetScreen() {
   return last_screen_;
+}
+
+const screenshoot &OpenGLRenderer3D::GetSegmentationScreen() {
+  return last_segmentation_screen_;
 }
 }
