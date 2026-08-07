@@ -65,6 +65,7 @@ class Ball {
     BallSpatialInfo CalculatePrediction();  // returns momentum in 10ms
 
     bool BallTouchesNet() { DO_VALIDATION; return ballTouchesNet; }
+    Vector3 GetPosition() const { DO_VALIDATION; return positionBuffer; }
     Vector3 GetAveragePosition(unsigned int duration_ms) const;
 
     void Process();

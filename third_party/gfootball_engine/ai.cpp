@@ -119,6 +119,8 @@ BOOST_PYTHON_MODULE(_gameplayfootball) {
 
   class_<SharedInfo>("SharedInfo")
       .def_readonly("ball_position", &SharedInfo::ball_position)
+      .def_readonly("ball_screen_position", &SharedInfo::ball_screen_position)
+      .def_readonly("ball_screen_visible", &SharedInfo::ball_screen_visible)
       .def_readonly("ball_rotation", &SharedInfo::ball_rotation)
       .def_readonly("ball_direction", &SharedInfo::ball_direction)
       .def_readonly("left_team", &SharedInfo::left_team)

@@ -220,6 +220,10 @@ class ActiveDump(object):
     self._segmentation_video_fd = None
     self._segmentation_video_tmp = None
     self._segmentation_video_writer = None
+    self._ball_xy = [] if (config['write_ball_coordinates'] and
+                           config['write_video']) else None
+    self._ball_visible = [] if self._ball_xy is not None else None
+    self._ball_engine_step = [] if self._ball_xy is not None else None
     self._frame_dim = None
     self._step_cnt = 0
     self._dump_file = None
@@ -263,11 +267,29 @@ class ActiveDump(object):
   def __del__(self):
     self.finalize()
 
-  def add_frame(self, frame, segmentation_frame=None):
+  def _add_ball_coordinate(self, ball_screen_position, visible, engine_step):
+    """Adds one ball record in final-video pixel coordinates."""
+    if self._ball_xy is None:
+      return
+    if ball_screen_position is None or len(ball_screen_position) < 2:
+      self._ball_xy.append((np.nan, np.nan))
+      self._ball_visible.append(False)
+    else:
+      self._ball_xy.append((
+          float(ball_screen_position[0]) * self._frame_dim[0],
+          float(ball_screen_position[1]) * self._frame_dim[1]))
+      self._ball_visible.append(bool(visible))
+    self._ball_engine_step.append(int(engine_step))
+
+  def add_frame(self, frame, segmentation_frame=None,
+                ball_screen_position=None, ball_screen_visible=False,
+                engine_step=-1):
     if self._video_writer:
       frame = frame[..., ::-1]
       frame = cv2.resize(frame, self._frame_dim, interpolation=cv2.INTER_AREA)
       self._video_writer.write(frame)
+      self._add_ball_coordinate(ball_screen_position, ball_screen_visible,
+                                engine_step)
     if self._segmentation_video_writer and segmentation_frame is not None:
       segmentation_frame = resize_segmentation_frame(
           segmentation_frame, self._frame_dim)
@@ -344,6 +366,10 @@ class ActiveDump(object):
         for d in o._debugs:
           writer.write(d)
       self._video_writer.write(frame)
+      self._add_ball_coordinate(
+          o['ball_screen_position'] if 'ball_screen_position' in o else None,
+          o['ball_screen_visible'] if 'ball_screen_visible' in o else False,
+          o['engine_step'] if 'engine_step' in o else -1)
     if self._segmentation_video_writer and 'segmentation_frame' in o:
       segmentation_frame = resize_segmentation_frame(
           o['segmentation_frame'], self._frame_dim)
@@ -395,6 +421,23 @@ class ActiveDump(object):
         logging.info('Segmentation video written to %s', segmentation_video)
       except:
         logging.error(traceback.format_exc())
+    if self._ball_xy is not None:
+      ball_coordinates = self._name + '_ball.npz'
+      if WRITE_FILES:
+        np.savez(
+            ball_coordinates,
+            xy=np.asarray(self._ball_xy, dtype=np.float32).reshape((-1, 2)),
+            visible=np.asarray(self._ball_visible, dtype=np.bool_),
+            engine_step=np.asarray(self._ball_engine_step, dtype=np.int32),
+            frame_size=np.asarray(self._frame_dim, dtype=np.int32),
+            fps=np.asarray(
+                const.PHYSICS_STEPS_PER_SECOND /
+                self._config['physics_steps_per_frame'], dtype=np.float32))
+      dump_info['ball_coordinates'] = ball_coordinates
+      logging.info('Ball coordinates written to %s', ball_coordinates)
+      self._ball_xy = None
+      self._ball_visible = None
+      self._ball_engine_step = None
     if self._dump_file:
       self._dump_file.close()
       self._dump_file = None
@@ -440,8 +483,12 @@ class ObservationState(object):
   def add_debug(self, text):
     self._debugs.append(text)
 
-  def add_frame(self, frame, segmentation_frame=None):
-    self._additional_frames.append((frame, segmentation_frame))
+  def add_frame(self, frame, segmentation_frame=None,
+                ball_screen_position=None, ball_screen_visible=False,
+                engine_step=-1):
+    self._additional_frames.append((
+        frame, segmentation_frame, ball_screen_position,
+        ball_screen_visible, engine_step))
 
 
 class ObservationProcessor(object):
@@ -486,12 +533,18 @@ class ObservationProcessor(object):
   def __getitem__(self, key):
     return self._trace[key]
 
-  def add_frame(self, frame, segmentation_frame=None):
+  def add_frame(self, frame, segmentation_frame=None,
+                ball_screen_position=None, ball_screen_visible=False,
+                engine_step=-1):
     if len(self._trace) > 0 and (self._config['write_video'] or
                                  self._config['write_segmentation_video']):
-      self._trace[-1].add_frame(frame, segmentation_frame)
+      self._trace[-1].add_frame(
+          frame, segmentation_frame, ball_screen_position,
+          ball_screen_visible, engine_step)
       for dump in self.pending_dumps():
-        dump.add_frame(frame, segmentation_frame)
+        dump.add_frame(
+            frame, segmentation_frame, ball_screen_position,
+            ball_screen_visible, engine_step)
 
   def update(self, trace):
     self._frame += 1
@@ -547,8 +600,11 @@ class ObservationProcessor(object):
         self._frame + config._steps_after, self._config)
     for step in list(self._trace)[-config._steps_before:]:
       config._active_dump.add_step(step)
-      for frame, segmentation_frame in step._additional_frames:
-        config._active_dump.add_frame(frame, segmentation_frame)
+      for (frame, segmentation_frame, ball_screen_position,
+           ball_screen_visible, engine_step) in step._additional_frames:
+        config._active_dump.add_frame(
+            frame, segmentation_frame, ball_screen_position,
+            ball_screen_visible, engine_step)
     if config._steps_after == 0:
       # Synchronously finalize dump, so that crash dump is recorded.
       config._active_dump.finalize()

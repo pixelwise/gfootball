@@ -79,6 +79,7 @@ class GameConfig(BaseSettings):
   video_quality_level: int = 0
   write_video: bool = True
   write_segmentation_video: bool = True
+  write_ball_coordinates: bool = False
   game_engine_random_seed: int = 48
   display_settings: DisplaySettings = Field(default_factory=DisplaySettings)
 

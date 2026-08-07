@@ -291,6 +291,8 @@ struct ControllerInfo {
 // All the information about the current state (available from python).
 struct SharedInfo {
   Position ball_position;
+  std::vector<float> ball_screen_position;
+  bool ball_screen_visible = false;
   Position ball_direction;
   Position ball_rotation;
   std::vector<PlayerInfo> left_team;

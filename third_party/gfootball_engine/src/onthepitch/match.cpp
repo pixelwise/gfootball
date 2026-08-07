@@ -847,6 +847,16 @@ void Match::GetTeamState(SharedInfo *state,
 void Match::GetState(SharedInfo *state) {
   DO_VALIDATION;
   state->ball_position = ball->GetAveragePosition(5).coords;
+  state->ball_screen_position = {0.0f, 0.0f};
+  state->ball_screen_visible = false;
+  if (GetGameConfig().render) {
+    Vector3 ball_screen_position = GetProjectedCoord(
+        ball->GetPosition(), camera, &state->ball_screen_visible);
+    state->ball_screen_position = {
+        ball_screen_position.coords[0] * 0.01f,
+        ball_screen_position.coords[1] * 0.01f,
+    };
+  }
   state->ball_rotation =
       (ball->GetRotation() / GetGameConfig().physics_steps_per_frame).coords;
   state->ball_direction =

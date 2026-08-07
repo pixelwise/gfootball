@@ -100,6 +100,7 @@ class Config(object):
         'video_quality_level': 0,  # 0 - low, 1 - medium, 2 - high
         'write_video': False,
         'write_segmentation_video': False,
+        'write_ball_coordinates': False,
         'display_settings': {
           'radar': True,
           'scoreboard': True,

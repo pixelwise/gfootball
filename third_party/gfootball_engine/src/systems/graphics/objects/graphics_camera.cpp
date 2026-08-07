@@ -214,6 +214,7 @@ void GraphicsCamera::SetPosition(const Vector3 &newPosition) {
 
     View &view = renderer->GetView(viewID);
 
+    renderer->SetFOV(buffer.cameraFOV);
     Matrix4 projectionMatrix = renderer->CreatePerspectiveMatrix(view.width / (view.height * 1.0f), buffer.cameraNearCap, buffer.cameraFarCap);
     Matrix4 viewMatrix = buffer.cameraMatrix;
 
@@ -229,8 +230,6 @@ void GraphicsCamera::SetPosition(const Vector3 &newPosition) {
     renderer->GetContextSize(width, height, bpp);
     // opengl window starts lower left, so invert y
     renderer->SetViewport(view.x, height - view.y - view.height, view.width, view.height);
-
-    renderer->SetFOV(buffer.cameraFOV);
 
     float depthParamNear = 0;
     float depthParamFar = 0;

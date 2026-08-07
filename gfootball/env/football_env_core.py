@@ -222,7 +222,10 @@ class FootballEnvCore(object):
       if 'frame' in self._observation:
         self._trace.add_frame(
             self._observation['frame'],
-            self._observation.get('segmentation_frame'))
+            self._observation.get('segmentation_frame'),
+            self._observation.get('ball_screen_position'),
+            self._observation.get('ball_screen_visible', False),
+            self._observation.get('engine_step', -1))
     debug['frame_cnt'] = self._step
 
     # Finish the episode on score.
@@ -320,6 +323,11 @@ class FootballEnvCore(object):
       frame = np.transpose(frame, [1, 2, 0])
       frame = np.flip(frame, 0)
       result['frame'] = frame
+      result['ball_screen_position'] = np.array(
+          [info.ball_screen_position[0], info.ball_screen_position[1]],
+          dtype=np.float32)
+      result['ball_screen_visible'] = bool(info.ball_screen_visible)
+      result['engine_step'] = info.step
       if self._config['write_segmentation_video']:
         segmentation_frame = self._env.get_segmentation_frame()
         segmentation_frame = np.frombuffer(segmentation_frame, dtype=np.uint8)
