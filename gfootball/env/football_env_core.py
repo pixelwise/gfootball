@@ -63,6 +63,7 @@ class CameraType(str, Enum):
     TELE = "tele"
     STATIC_SIDE_0 = "static-side-0"
     STATIC_GOAL_0 = "static-goal-0"
+    PANO = "pano"
 
 
 CAMERA_MAP = {
@@ -71,6 +72,7 @@ CAMERA_MAP = {
     CameraType.TELE: libgame.CameraType.TELE,
     CameraType.STATIC_SIDE_0: libgame.CameraType.STATIC_SIDE_0,
     CameraType.STATIC_GOAL_0: libgame.CameraType.STATIC_GOAL_0,
+    CameraType.PANO: libgame.CameraType.PANO,
 }
 
 

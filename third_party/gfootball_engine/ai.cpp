@@ -252,7 +252,8 @@ BOOST_PYTHON_MODULE(_gameplayfootball) {
       .value("BIRD_EYE", CameraType::BIRD_EYE)
       .value("TELE", CameraType::TELE)
       .value("STATIC_SIDE_0", CameraType::STATIC_SIDE_0)
-      .value("STATIC_GOAL_0", CameraType::STATIC_GOAL_0);
+      .value("STATIC_GOAL_0", CameraType::STATIC_GOAL_0)
+      .value("PANO", CameraType::PANO);
 
   enum_<e_RenderingMode>("e_RenderingMode")
       .value("e_Disabled", e_RenderingMode::e_Disabled)

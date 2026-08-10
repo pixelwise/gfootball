@@ -282,6 +282,28 @@ class FootballEnvTest(parameterized.TestCase):
     self.assertEqual(hash_value, expected_hash_value)
     env.close()
 
+  def test_pano_render(self):
+    """Verifies panoramic sideline rendering."""
+    if 'UNITTEST_IN_DOCKER' in os.environ:
+      # Rendering is not supported.
+      return
+    width = 1824
+    height = 608
+    cfg = config.Config({
+        'camera': 'pano',
+        'level': 'tests.11_vs_11_hard_deterministic',
+        'render_resolution_x': width,
+        'render_resolution_y': height,
+    })
+    env = football_env.FootballEnv(cfg)
+    env.reset()
+    frame = env.render(mode='rgb_array')
+    self.assertEqual(frame.shape, (height, width, 3))
+    env.step(football_action_set.action_right)
+    frame = env.render(mode='rgb_array')
+    self.assertEqual(frame.shape, (height, width, 3))
+    env.close()
+
   def test_dynamic_render(self):
     """Verifies dynamic render support."""
     if 'UNITTEST_IN_DOCKER' in os.environ:

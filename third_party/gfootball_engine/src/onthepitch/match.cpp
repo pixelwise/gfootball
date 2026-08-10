@@ -572,7 +572,20 @@ void Match::UpdateIngameCamera() {
   // normal cam
 
 
-  if (!IsGoalScored() || (IsGoalScored() && goalScoredTimer < 1000)) {
+  if (GetGameConfig().camera == CameraType::PANO) {
+    DO_VALIDATION;
+
+    // Panoramic sideline camera. Keep the same location and tilt as the
+    // static side preset, but center it on the pitch instead of panning it.
+    cameraOrientation.SetAngleAxis(0.32f * pi, Vector3(1, 0, 0));
+    cameraNodeOrientation = QUATERNION_IDENTITY;
+    cameraNodePosition = Vector3(0, -45.0f, 15.0f);
+    cameraFOV = 110.0f;
+    cameraNearCap = 5.0f;
+    cameraFarCap = 300.0f;
+
+  } else if (!IsGoalScored() ||
+             (IsGoalScored() && goalScoredTimer < 1000)) {
     DO_VALIDATION;
 
     if (GetGameConfig().camera == CameraType::WIDE) {
@@ -1044,7 +1057,8 @@ bool Match::Process() {
      }
    }
 
-   if (GetReferee()->GetBuffer().active == true &&
+   if (GetGameConfig().camera != CameraType::PANO &&
+       GetReferee()->GetBuffer().active == true &&
        (GetReferee()->GetCurrentFoulType() == 2 ||
            GetReferee()->GetCurrentFoulType() == 3) &&
            GetReferee()->GetBuffer().stopTime < GetActualTime_ms() - 1000) {
@@ -1071,7 +1085,7 @@ bool Match::Process() {
 }
 
 void Match::UpdateCamera() {
-  if (autoUpdateIngameCamera) {
+  if (autoUpdateIngameCamera || GetGameConfig().camera == CameraType::PANO) {
     DO_VALIDATION;
     Mirror(false, true, false);
     UpdateIngameCamera();
@@ -1081,7 +1095,8 @@ void Match::UpdateCamera() {
   DO_VALIDATION;
   unsigned int zoomTime = 2000;
   unsigned int startTime = 0;
-  if (actualTime_ms < zoomTime + startTime) {
+  if (GetGameConfig().camera != CameraType::PANO &&
+      actualTime_ms < zoomTime + startTime) {
     DO_VALIDATION;  // nice effect at the start
 
     Quaternion initialOrientation = QUATERNION_IDENTITY;

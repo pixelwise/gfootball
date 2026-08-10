@@ -67,6 +67,7 @@ enum class CameraType {
     TELE,
     STATIC_SIDE_0,
     STATIC_GOAL_0,
+    PANO,
 };
 
 
