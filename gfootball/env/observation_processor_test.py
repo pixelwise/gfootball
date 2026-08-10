@@ -27,6 +27,21 @@ class ObservationProcessorTest(absltest.TestCase):
   def test_segmentation_is_disabled_by_default(self):
     self.assertFalse(config.Config()['write_segmentation_video'])
 
+  def test_instance_segmentation_is_disabled_by_default(self):
+    self.assertFalse(config.Config()['write_instance_segmentation_video'])
+
+  def test_resize_instance_segmentation_preserves_labels(self):
+    frame = np.zeros((2, 2, 3), dtype=np.uint8)
+    frame[0, 0] = 3
+    frame[0, 1] = 17
+    frame[1, 0] = 129
+
+    resized = observation_processor.resize_instance_segmentation_frame(
+        frame, (8, 6))
+
+    self.assertEqual((6, 8, 3), resized.shape)
+    self.assertEqual({0, 3, 17, 129}, set(np.unique(resized)))
+
   def test_ball_coordinates_are_disabled_by_default(self):
     self.assertFalse(config.Config()['write_ball_coordinates'])
 
@@ -74,7 +89,8 @@ class ObservationProcessorTest(absltest.TestCase):
       name = os.path.join(directory, 'episode_done_test')
       active_dump = observation_processor.ActiveDump(name, 2, dump_config)
       mask = np.zeros((6, 8, 3), dtype=np.uint8)
-      mask[:, :4] = 255
+      # Instance labels are converted to a binary semantic mask.
+      mask[:, :4] = 7
 
       active_dump.add_frame(np.zeros_like(mask), mask)
       active_dump.add_frame(np.zeros_like(mask), mask)
@@ -88,6 +104,59 @@ class ObservationProcessorTest(absltest.TestCase):
       video.release()
       self.assertTrue(ok)
       self.assertEqual({0, 255}, set(np.unique(decoded_mask)))
+
+  def test_active_dump_writes_lossless_instance_video_and_metadata(self):
+    with tempfile.TemporaryDirectory() as directory:
+      dump_config = config.Config({
+          'render_resolution_x': 8,
+          'render_resolution_y': 6,
+          'video_quality_level': 2,
+          'write_instance_segmentation_video': True,
+      })
+      name = os.path.join(directory, 'episode_done_test')
+      active_dump = observation_processor.ActiveDump(name, 2, dump_config)
+      active_dump._capture_instance_metadata({
+          'left_team_instance_id': np.array([1, 3], dtype=np.uint8),
+          'right_team_instance_id': np.array([17], dtype=np.uint8),
+      })
+      # IDs first observed later (for example, after a substitution) are added.
+      active_dump._capture_instance_metadata({
+          'left_team_instance_id': np.array([1, 3], dtype=np.uint8),
+          'right_team_instance_id': np.array([17, 18], dtype=np.uint8),
+      })
+      labels = np.zeros((6, 8, 3), dtype=np.uint8)
+      labels[:, :3] = 1
+      labels[:, 3:6] = 3
+      labels[:, 6:] = 17
+
+      active_dump.add_frame(
+          np.zeros_like(labels), labels, engine_step=10)
+      active_dump.add_frame(
+          np.zeros_like(labels), labels, engine_step=20)
+      dump_info = active_dump.finalize()
+
+      self.assertEqual(name + '_instances.avi',
+                       dump_info['instance_segmentation_video'])
+      self.assertEqual(name + '_instances.npz',
+                       dump_info['instance_segmentation_metadata'])
+      video = cv2.VideoCapture(dump_info['instance_segmentation_video'])
+      self.assertEqual(2, int(video.get(cv2.CAP_PROP_FRAME_COUNT)))
+      ok, decoded_labels = video.read()
+      video.release()
+      self.assertTrue(ok)
+      self.assertEqual({1, 3, 17}, set(np.unique(decoded_labels)))
+      np.testing.assert_array_equal(
+          decoded_labels[:, :, 0], decoded_labels[:, :, 1])
+      np.testing.assert_array_equal(
+          decoded_labels[:, :, 1], decoded_labels[:, :, 2])
+      with np.load(dump_info['instance_segmentation_metadata']) as metadata:
+        np.testing.assert_array_equal(metadata['engine_step'], [10, 20])
+        np.testing.assert_array_equal(
+            metadata['instance_id'], [1, 3, 17, 18])
+        np.testing.assert_array_equal(metadata['team'], [0, 0, 1, 1])
+        np.testing.assert_array_equal(
+            metadata['team_player_index'], [0, 1, 0, 1])
+        np.testing.assert_array_equal(metadata['frame_size'], [8, 6])
 
 
 if __name__ == '__main__':

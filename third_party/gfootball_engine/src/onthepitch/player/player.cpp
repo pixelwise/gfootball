@@ -101,7 +101,8 @@ void Player::Activate(boost::intrusive_ptr<Node> humanoidSourceNode,
       this, humanoidSourceNode, fullbodySourceNode, colorCoords, animCollection,
       GetTeam()->GetSceneNode(), kit));
 
-  CastHumanoid()->MarkAsPlayerGeometry();
+  // Zero is reserved for the background in instance segmentation frames.
+  CastHumanoid()->MarkAsPlayerGeometry(GetStableID() + 1);
 
   controller.reset(new ElizaController(match, lazyPlayer));
   CastController()->SetPlayer(this);

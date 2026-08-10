@@ -95,8 +95,9 @@ class FootballEnvCore(object):
         'physics_steps_per_frame']
     env.game_config.render_resolution_x = self._config['render_resolution_x']
     env.game_config.render_resolution_y = self._config['render_resolution_y']
-    env.game_config.render_segmentation = self._config[
-        'write_segmentation_video']
+    env.game_config.render_segmentation = (
+        self._config['write_segmentation_video'] or
+        self._config['write_instance_segmentation_video'])
     env.game_config.display_radar = self._config['display_settings']['radar']
     env.game_config.display_scoreboard = self._config['display_settings']['scoreboard']
     env.game_config.display_player_names = self._config[
@@ -328,7 +329,8 @@ class FootballEnvCore(object):
           dtype=np.float32)
       result['ball_screen_visible'] = bool(info.ball_screen_visible)
       result['engine_step'] = info.step
-      if self._config['write_segmentation_video']:
+      if (self._config['write_segmentation_video'] or
+          self._config['write_instance_segmentation_video']):
         segmentation_frame = self._env.get_segmentation_frame()
         segmentation_frame = np.frombuffer(segmentation_frame, dtype=np.uint8)
         expected_size = (self._config['render_resolution_x'] *
@@ -406,6 +408,7 @@ class FootballEnvCore(object):
     active = []
     yellow_cards = []
     roles = []
+    instance_ids = []
     designated_player = -1
     for id, player in enumerate(players):
       positions.append(player.position[0])
@@ -416,6 +419,7 @@ class FootballEnvCore(object):
       active.append(player.is_active)
       yellow_cards.append(player.has_card)
       roles.append(player.role)
+      instance_ids.append(player.instance_id)
       if player.designated_player:
         designated_player = id
     result[name] = np.reshape(np.array(positions), [-1, 2])
@@ -427,6 +431,8 @@ class FootballEnvCore(object):
     result['{}_active'.format(name)] = np.array(active)
     result['{}_yellow_card'.format(name)] = np.array(yellow_cards)
     result['{}_roles'.format(name)] = np.array(roles)
+    result['{}_instance_id'.format(name)] = np.array(
+        instance_ids, dtype=np.uint8)
     result['{}_designated_player'.format(name)] = designated_player
 
   def observation(self):

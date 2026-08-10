@@ -50,7 +50,13 @@ except ImportError:
 def resize_segmentation_frame(frame, frame_dim):
   """Resizes a segmentation frame while preserving its binary labels."""
   frame = cv2.resize(frame, frame_dim, interpolation=cv2.INTER_NEAREST)
-  return np.where(frame > 127, 255, 0).astype(np.uint8)
+  return np.where(frame != 0, 255, 0).astype(np.uint8)
+
+
+def resize_instance_segmentation_frame(frame, frame_dim):
+  """Resizes an uint8 instance-label frame without interpolating labels."""
+  return cv2.resize(frame, frame_dim,
+                    interpolation=cv2.INTER_NEAREST).astype(np.uint8)
 
 
 class DumpConfig(object):
@@ -220,6 +226,11 @@ class ActiveDump(object):
     self._segmentation_video_fd = None
     self._segmentation_video_tmp = None
     self._segmentation_video_writer = None
+    self._instance_video_fd = None
+    self._instance_video_tmp = None
+    self._instance_video_writer = None
+    self._instance_engine_step = []
+    self._instance_metadata = {}
     self._ball_xy = [] if (config['write_ball_coordinates'] and
                            config['write_video']) else None
     self._ball_visible = [] if self._ball_xy is not None else None
@@ -227,7 +238,8 @@ class ActiveDump(object):
     self._frame_dim = None
     self._step_cnt = 0
     self._dump_file = None
-    if config['write_video'] or config['write_segmentation_video']:
+    if (config['write_video'] or config['write_segmentation_video'] or
+        config['write_instance_segmentation_video']):
       self._frame_dim = (
           config['render_resolution_x'], config['render_resolution_y'])
       if config['video_quality_level'] not in [1, 2]:
@@ -261,6 +273,14 @@ class ActiveDump(object):
           self._segmentation_video_tmp, mask_fcc,
           const.PHYSICS_STEPS_PER_SECOND / config['physics_steps_per_frame'],
           self._frame_dim)
+    if config['write_instance_segmentation_video']:
+      self._instance_video_fd, self._instance_video_tmp = \
+          tempfile.mkstemp(suffix='.avi')
+      instance_fcc = cv2.VideoWriter_fourcc('p', 'n', 'g', ' ')
+      self._instance_video_writer = cv2.VideoWriter(
+          self._instance_video_tmp, instance_fcc,
+          const.PHYSICS_STEPS_PER_SECOND / config['physics_steps_per_frame'],
+          self._frame_dim)
     if WRITE_FILES:
       self._dump_file = open(name + '.dump', 'wb')
 
@@ -281,6 +301,31 @@ class ActiveDump(object):
       self._ball_visible.append(bool(visible))
     self._ball_engine_step.append(int(engine_step))
 
+  def _write_segmentation_frames(self, segmentation_frame, engine_step):
+    """Writes binary and instance views derived from one renderer label map."""
+    if segmentation_frame is None:
+      return
+    if self._segmentation_video_writer:
+      binary_frame = resize_segmentation_frame(
+          segmentation_frame, self._frame_dim)
+      self._segmentation_video_writer.write(binary_frame)
+    if self._instance_video_writer:
+      instance_frame = resize_instance_segmentation_frame(
+          segmentation_frame, self._frame_dim)
+      self._instance_video_writer.write(instance_frame)
+      self._instance_engine_step.append(int(engine_step))
+
+  def _capture_instance_metadata(self, observation):
+    if not self._instance_video_writer:
+      return
+    for team, key in enumerate(
+        ['left_team_instance_id', 'right_team_instance_id']):
+      if key not in observation:
+        continue
+      for player_index, instance_id in enumerate(observation[key]):
+        self._instance_metadata.setdefault(
+            int(instance_id), (team, player_index))
+
   def add_frame(self, frame, segmentation_frame=None,
                 ball_screen_position=None, ball_screen_visible=False,
                 engine_step=-1):
@@ -290,10 +335,7 @@ class ActiveDump(object):
       self._video_writer.write(frame)
       self._add_ball_coordinate(ball_screen_position, ball_screen_visible,
                                 engine_step)
-    if self._segmentation_video_writer and segmentation_frame is not None:
-      segmentation_frame = resize_segmentation_frame(
-          segmentation_frame, self._frame_dim)
-      self._segmentation_video_writer.write(segmentation_frame)
+    self._write_segmentation_frames(segmentation_frame, engine_step)
 
   def add_step(self, o):
     # Write video if requested.
@@ -370,10 +412,11 @@ class ActiveDump(object):
           o['ball_screen_position'] if 'ball_screen_position' in o else None,
           o['ball_screen_visible'] if 'ball_screen_visible' in o else False,
           o['engine_step'] if 'engine_step' in o else -1)
-    if self._segmentation_video_writer and 'segmentation_frame' in o:
-      segmentation_frame = resize_segmentation_frame(
-          o['segmentation_frame'], self._frame_dim)
-      self._segmentation_video_writer.write(segmentation_frame)
+    self._capture_instance_metadata(o)
+    if 'segmentation_frame' in o:
+      self._write_segmentation_frames(
+          o['segmentation_frame'],
+          o['engine_step'] if 'engine_step' in o else -1)
     # Write the dump.
     temp_frame = None
     if 'frame' in o._trace['observation']:
@@ -421,6 +464,46 @@ class ActiveDump(object):
         logging.info('Segmentation video written to %s', segmentation_video)
       except:
         logging.error(traceback.format_exc())
+    if self._instance_video_writer:
+      self._instance_video_writer.release()
+      self._instance_video_writer = None
+      os.close(self._instance_video_fd)
+      try:
+        instance_video = self._name + '_instances.avi'
+        if WRITE_FILES:
+          shutil.move(self._instance_video_tmp, instance_video)
+        dump_info['instance_segmentation_video'] = instance_video
+        logging.info('Instance segmentation video written to %s',
+                     instance_video)
+      except:
+        logging.error(traceback.format_exc())
+
+      instance_metadata = self._name + '_instances.npz'
+      instance_ids = np.asarray(
+          sorted(self._instance_metadata), dtype=np.uint8)
+      teams = np.asarray([
+          self._instance_metadata[int(instance_id)][0]
+          for instance_id in instance_ids], dtype=np.int8)
+      team_player_index = np.asarray([
+          self._instance_metadata[int(instance_id)][1]
+          for instance_id in instance_ids], dtype=np.int16)
+      if WRITE_FILES:
+        np.savez(
+            instance_metadata,
+            engine_step=np.asarray(
+                self._instance_engine_step, dtype=np.int32),
+            instance_id=instance_ids,
+            team=teams,
+            team_player_index=team_player_index,
+            frame_size=np.asarray(self._frame_dim, dtype=np.int32),
+            fps=np.asarray(
+                const.PHYSICS_STEPS_PER_SECOND /
+                self._config['physics_steps_per_frame'], dtype=np.float32))
+      dump_info['instance_segmentation_metadata'] = instance_metadata
+      logging.info('Instance segmentation metadata written to %s',
+                   instance_metadata)
+      self._instance_engine_step = None
+      self._instance_metadata = None
     if self._ball_xy is not None:
       ball_coordinates = self._name + '_ball.npz'
       if WRITE_FILES:
@@ -536,8 +619,10 @@ class ObservationProcessor(object):
   def add_frame(self, frame, segmentation_frame=None,
                 ball_screen_position=None, ball_screen_visible=False,
                 engine_step=-1):
-    if len(self._trace) > 0 and (self._config['write_video'] or
-                                 self._config['write_segmentation_video']):
+    if len(self._trace) > 0 and (
+        self._config['write_video'] or
+        self._config['write_segmentation_video'] or
+        self._config['write_instance_segmentation_video']):
       self._trace[-1].add_frame(
           frame, segmentation_frame, ball_screen_position,
           ball_screen_visible, engine_step)
@@ -551,7 +636,8 @@ class ObservationProcessor(object):
     remove_frame = (not self._config['write_video'] and
                     'frame' in trace['observation'])
     remove_segmentation = (
-        not self._config['write_segmentation_video'] and
+        not (self._config['write_segmentation_video'] or
+             self._config['write_instance_segmentation_video']) and
         'segmentation_frame' in trace['observation'])
     if remove_frame or remove_segmentation:
       # Keep only pixel observations used by the requested video writers.

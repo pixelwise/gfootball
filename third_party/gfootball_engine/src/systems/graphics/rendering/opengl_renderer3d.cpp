@@ -1261,8 +1261,8 @@ void OpenGLRenderer3D::RenderVertexBuffer(
     const VertexBufferQueueEntry *queueEntry = &(*vertexBufferQueueIter);
 
     if (currentShader->first == "zphase") {
-      SetUniformFloat("zphase", "isPlayer",
-                      queueEntry->is_player ? 1.0f : 0.0f);
+      SetUniformFloat("zphase", "instanceID",
+                      queueEntry->instance_id / 255.0f);
     }
 
     vertexBuffer = queueEntry->vertexBuffer->GetResource();

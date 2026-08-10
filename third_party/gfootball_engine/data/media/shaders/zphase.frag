@@ -16,8 +16,8 @@
 #pragma optimize(on)
 
 out vec4 stdout;
-uniform float isPlayer;
+uniform float instanceID;
 
 void main(void) {
-  stdout = vec4(isPlayer, isPlayer, isPlayer, 1.0);
+  stdout = vec4(instanceID, instanceID, instanceID, 1.0);
 }

@@ -198,14 +198,16 @@ HumanoidBase::~HumanoidBase() {
   // the other full body mesh ref is connected to a geometry object which has taken over ownership and will clean it up
 }
 
-void HumanoidBase::MarkAsPlayerGeometry() {
+void HumanoidBase::MarkAsPlayerGeometry(int instanceID) {
   DO_VALIDATION;
+  assert(instanceID > 0 && instanceID <= 255);
   std::list<boost::intrusive_ptr<Geometry> > playerGeometry;
   humanoidNode->GetObjects<Geometry>(e_ObjectType_Geometry, playerGeometry);
   fullbodyNode->GetObjects<Geometry>(e_ObjectType_Geometry, playerGeometry);
   playerGeometry.push_back(hairStyle);
   for (auto &geometry : playerGeometry) {
     geometry->SetProperty("semantic_class", "player");
+    geometry->SetProperty("instance_id", int_to_str(instanceID).c_str());
   }
 }
 

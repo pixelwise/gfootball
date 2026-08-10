@@ -64,6 +64,7 @@ namespace blunted {
     Vector3 position;
     Quaternion rotation;
     bool is_player = false;
+    int instance_id = 0;
 
   };
 

@@ -17,6 +17,8 @@
 
 #include "graphics_camera.hpp"
 
+#include <cstdlib>
+
 #include "../../../systems/graphics/rendering/r3d_messages.hpp"
 #include "../../../main.hpp"
 
@@ -144,6 +146,11 @@ void GraphicsCamera::SetPosition(const Vector3 &newPosition) {
       (*visibleGeometryBufferIter).is_player =
           (*visibleGeometryIter)->PropertyExists("semantic_class") &&
           (*visibleGeometryIter)->GetProperty("semantic_class") == "player";
+      if ((*visibleGeometryBufferIter).is_player &&
+          (*visibleGeometryIter)->PropertyExists("instance_id")) {
+        (*visibleGeometryBufferIter).instance_id = std::atoi(
+            (*visibleGeometryIter)->GetProperty("instance_id").c_str());
+      }
 
       visibleGeometryIter++;
     }

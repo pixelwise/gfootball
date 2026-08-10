@@ -832,6 +832,7 @@ void Match::GetTeamState(SharedInfo *state,
       info.has_card = player->HasCards();
       info.is_active = player->IsActive();
       info.role = player->GetFormationEntry().role;
+      info.instance_id = player->GetStableID() + 1;
       if (player->HasPossession() && GetLastTouchTeamID() != -1 &&
           GetLastTouchTeam()->GetLastTouchPlayer() == player) {
         DO_VALIDATION;

@@ -260,6 +260,7 @@ struct PlayerInfo {
     tired_factor = f.tired_factor;
     role = f.role;
     designated_player = f.designated_player;
+    instance_id = f.instance_id;
   }
   bool operator == (const PlayerInfo& f) const {
     return player_position == f.player_position &&
@@ -268,7 +269,8 @@ struct PlayerInfo {
         is_active == f.is_active &&
         tired_factor == f.tired_factor &&
         role == f.role &&
-        designated_player == f.designated_player;
+        designated_player == f.designated_player &&
+        instance_id == f.instance_id;
   }
   Position player_position;
   Position player_direction;
@@ -277,6 +279,7 @@ struct PlayerInfo {
   bool designated_player = false;
   float tired_factor = 0.0f; // In the [0..1] range.
   e_PlayerRole role = e_PlayerRole_GK;
+  int instance_id = 0;
 };
 
 struct ControllerInfo {

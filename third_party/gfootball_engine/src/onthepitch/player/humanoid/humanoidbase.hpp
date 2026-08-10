@@ -265,7 +265,7 @@ class HumanoidBase {
 
     boost::intrusive_ptr<Node> GetHumanoidNode() { DO_VALIDATION; return humanoidNode; }
     boost::intrusive_ptr<Node> GetFullbodyNode() { DO_VALIDATION; return fullbodyNode; }
-    void MarkAsPlayerGeometry();
+    void MarkAsPlayerGeometry(int instanceID);
 
     virtual float GetDecayingPositionOffsetLength() const { return decayingPositionOffset.GetLength(); }
     virtual float GetDecayingDifficultyFactor() const { return decayingDifficultyFactor; }
