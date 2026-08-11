@@ -68,6 +68,7 @@ class GameConfig(BaseSettings):
   camera: CameraType = CameraType.WIDE
   custom_display_stats: Optional[str] = None
   display_game_stats: bool = True
+  episodes: int = Field(default=1, ge=0)
   dump_full_episodes: bool = True
   dump_scores: bool = False
   physics_steps_per_frame: int = 10
@@ -107,6 +108,19 @@ flags.DEFINE_string('config_file', None, 'Path to YAML configuration file')
 flags.DEFINE_bool('render', True, 'Whether to do game rendering.')
 
 
+def run_episodes(env, episodes: int) -> None:
+  """Run completed episodes, or continuously when episodes is zero."""
+  completed_episodes = 0
+  env.reset()
+  while True:
+    _, _, done, _ = env.step([])
+    if done:
+      completed_episodes += 1
+      if episodes and completed_episodes >= episodes:
+        return
+      env.reset()
+
+
 def main(_):
 
   if FLAGS.config_file:
@@ -125,12 +139,8 @@ def main(_):
 
   if FLAGS.render:
     env.render()
-  env.reset()
   try:
-    while True:
-      _, _, done, _ = env.step([])
-      if done:
-        env.reset()
+    run_episodes(env, cfg.episodes)
   except KeyboardInterrupt:
     logging.warning('Game stopped, writing dump...')
     env.write_dump('shutdown')

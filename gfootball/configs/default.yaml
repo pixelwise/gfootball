@@ -3,6 +3,7 @@ players: ""
 level: "11_vs_11_stochastic"
 custom_display_stats: null
 display_game_stats: false
+episodes: 1
 dump_full_episodes: true
 dump_scores: false
 physics_steps_per_frame: 10
