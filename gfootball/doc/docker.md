@@ -1,9 +1,9 @@
-# Running in Docker #
+# Running in a container #
 
-Docker is the recommended setup when native engine dependencies should not be
-installed on the host. The default image includes Python 3.9, uv, SDL2,
-Boost.Python, and the C++ build toolchain; the engine is compiled during the
-image build.
+Docker or Podman is the recommended setup when native engine dependencies
+should not be installed on the host. The default image includes Python 3.9,
+uv, SDL2, Boost.Python, and the C++ build toolchain; the engine is compiled
+during the image build.
 
 ## Build the image
 
@@ -11,10 +11,12 @@ image build.
 git clone https://github.com/google-research/football.git
 cd football
 docker build -t gfootball .
+# or, without Docker:
+podman build -t gfootball .
 ```
 
 No Python, uv, compiler, SDL, or Boost installation is required on the host.
-Docker itself must be installed and usable by the current user.
+Docker or Podman itself must be installed and usable by the current user.
 
 ## Start the default game
 
@@ -34,6 +36,13 @@ needed:
 
 ```shell
 GFOOTBALL_DOCKER_IMAGE=my-gfootball-image ./start_game_docker.sh
+```
+
+The script prefers Docker when both are installed and otherwise uses Podman.
+To select the runtime explicitly, set `GFOOTBALL_CONTAINER_RUNTIME`:
+
+```shell
+GFOOTBALL_CONTAINER_RUNTIME=podman ./start_game_docker.sh
 ```
 
 ## Start a container shell

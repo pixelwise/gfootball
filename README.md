@@ -30,13 +30,14 @@ dependencies on the host. The image uses Python 3.9 and uv, and compiles the
 engine with SDL2 and Boost installed inside the container.
 
 ```shell
-docker build -t gfootball .
+docker build -t gfootball . # or: podman build -t gfootball .
 ./start_game_docker.sh
 ```
 
 This starts the default game with off-screen rendering and writes episode
-dumps/videos to `./dumps`. See [running in Docker](gfootball/doc/docker.md) for
-container shells, visible X11 rendering, and validation commands.
+dumps/videos to `./dumps`. The start script supports Docker and Podman. See
+[running in Docker](gfootball/doc/docker.md) for container shells, visible X11
+rendering, and validation commands.
 
 # Contents #
 
