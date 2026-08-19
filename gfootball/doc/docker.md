@@ -29,10 +29,10 @@ videos to `./dumps` beside the script:
 ./start_game_docker.sh
 ```
 
-The script runs the container under your host UID/GID, so generated files are
-readable on the host. It sets a temporary uv cache inside the container and
-removes the container when the game finishes. Override the image tag when
-needed:
+The script keeps generated files readable on the host: it runs Docker with
+your host UID/GID, while rootless Podman maps its container root to your host
+user. It sets a temporary uv cache inside the container and removes the
+container when the game finishes. Override the image tag when needed:
 
 ```shell
 GFOOTBALL_DOCKER_IMAGE=my-gfootball-image ./start_game_docker.sh
@@ -43,6 +43,16 @@ To select the runtime explicitly, set `GFOOTBALL_CONTAINER_RUNTIME`:
 
 ```shell
 GFOOTBALL_CONTAINER_RUNTIME=podman ./start_game_docker.sh
+```
+
+Podman runs rootless by default. The script keeps its default user namespace
+and adds the `:Z` bind-mount label needed on SELinux hosts, so files in
+`./dumps` remain owned by you. If that directory was created by an earlier
+rootful container and is not writable, choose a new user-owned location
+without requiring sudo:
+
+```shell
+GFOOTBALL_DUMPS_DIR="$HOME/gfootball-dumps" ./start_game_docker.sh
 ```
 
 ## Start a container shell
