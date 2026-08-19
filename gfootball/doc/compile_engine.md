@@ -156,6 +156,9 @@ repository root, run:
 
 This installs uv when necessary, synchronizes the locked `.venv`, and installs
 Google Research Football in editable mode while compiling the native engine.
+The install creates an untracked `gfootball_engine` link in the repository root
+that points to `third_party/gfootball_engine`; it is specific to the local
+checkout and must not be committed.
 The default Python 3.9/native prefix is
 `/home/artem/miniconda3/envs/gfootball`. Override it when needed:
 

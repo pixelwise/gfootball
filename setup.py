@@ -45,7 +45,9 @@ class CustomBuild(build_ext):
   def run_unix(self):
     if self.inplace or 'editable_wheel' in sys.argv:
       # For development installs (legacy `develop` or PEP 660 editable wheel),
-      # gfootball_engine module has to be located in the project root directory.
+      # create an untracked source-tree link so gfootball_engine resolves to the
+      # native engine package. This link is installation-specific and must not
+      # be committed.
       dest_dir = "gfootball_engine"
       if not os.path.exists(dest_dir):
         try:
