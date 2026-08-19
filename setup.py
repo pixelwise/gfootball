@@ -82,8 +82,8 @@ class CustomBuild(build_ext):
     copy_fonts(dest_dir)
 
   def run_windows(self):
-    guide_message = 'Please follow the guide on how to install prerequisites: ' \
-                    'https://github.com/google-research/football/blob/master/gfootball/doc/compile_engine.md#windows'
+    guide_message = 'Build and run Google Research Football with Docker: ' \
+                    'https://github.com/google-research/football/blob/master/gfootball/doc/docker.md'
     if not os.environ.get('VCPKG_ROOT'):
       raise OSError('VCPKG_ROOT environment variable is not defined.\n' + guide_message)
 

@@ -1,16 +1,30 @@
-ARG DOCKER_BASE
-FROM $DOCKER_BASE
+FROM python:3.9-slim-bullseye
 
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get --no-install-recommends install -yq git cmake build-essential \
-  libgl1-mesa-dev libsdl2-dev \
-  libsdl2-image-dev libsdl2-ttf-dev libsdl2-gfx-dev libboost-all-dev \
-  libdirectfb-dev libst-dev mesa-utils xvfb x11vnc \
-  python3-pip
+ENV DEBIAN_FRONTEND=noninteractive \
+    UV_LINK_MODE=copy
 
-RUN python3 -m pip install --upgrade pip setuptools wheel
-RUN python3 -m pip install psutil
+RUN apt-get update && apt-get --no-install-recommends install -yq \
+    build-essential \
+    cmake \
+    libboost-all-dev \
+    libdirectfb-dev \
+    libegl1-mesa-dev \
+    libgl1-mesa-dev \
+    libsdl2-dev \
+    libsdl2-gfx-dev \
+    libsdl2-image-dev \
+    libsdl2-ttf-dev \
+    libst-dev \
+    make \
+    pkg-config \
+    xauth \
+    xvfb \
+ && rm -rf /var/lib/apt/lists/*
 
-COPY . /gfootball
-RUN cd /gfootball && python3 -m pip install .
-WORKDIR '/gfootball'
+COPY --from=ghcr.io/astral-sh/uv:0.11.30 /uv /uvx /bin/
+
+WORKDIR /gfootball
+COPY . .
+
+# This compiles the native engine and creates the locked uv environment.
+RUN uv sync --locked

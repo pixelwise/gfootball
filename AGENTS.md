@@ -4,77 +4,40 @@ Google Research Football is a Python reinforcement-learning environment built ar
 
 # Setup
 
-Run commands from the repository root. The uv project requires Python 3.9-3.10, pins the development interpreter to Python 3.9, the package is version `2.10.3`, and the native engine uses C++14/CMake 3.5+.
-
-Linux prerequisites and environment:
-
-```sh
-sudo apt-get install git cmake build-essential libgl1-mesa-dev libsdl2-dev \
-  libsdl2-image-dev libsdl2-ttf-dev libsdl2-gfx-dev libboost-all-dev \
-  libdirectfb-dev libst-dev mesa-utils xvfb x11vnc python3-pip
-./build-uv.sh
-```
-
-On macOS, install native dependencies first:
-
-```sh
-brew install git python3 cmake sdl2 sdl2_image sdl2_ttf sdl2_gfx boost boost-python3
-./build-uv.sh
-```
-
-`build-uv.sh` is the single Python setup entry point: it installs uv if necessary, creates/synchronizes `.venv` from `uv.lock`, compiles the engine, and verifies imports. It defaults to `/home/artem/miniconda3/envs/gfootball/bin/python`; override `GFOOTBALL_PYTHON` and `GFOOTBALL_NATIVE_PREFIX` together for another compatible Python 3.9/Boost.Python toolchain. Use Homebrew's Python on macOS because `boost-python3` is built for it. Windows additionally requires Visual Studio C++ tools, CMake, and vcpkg. See `gfootball/doc/compile_engine.md` for platform-specific native prerequisites.
+Run commands from the repository root. Docker is the supported development and
+runtime environment: it provides Python 3.9, uv, C++14/CMake, SDL2, and
+Boost.Python without requiring host-native dependencies.
 
 # Build / run
 
-Set up or refresh the development build:
+Build or refresh the development image:
 
 ```sh
-./build-uv.sh
+docker build -t gfootball .
 ```
 
-The setuptools `build_ext` hook invokes `gfootball/build_game_engine.sh` on Unix, which clears the engine CMake cache, runs CMake and Make with memory-aware parallelism, and links the resulting library as `_gameplayfootball.so`. For a standalone distribution build, export the same toolchain first: `GFOOTBALL_BUILD_PYTHON="$GFOOTBALL_PYTHON" CMAKE_PREFIX_PATH="$GFOOTBALL_NATIVE_PREFIX" LD_LIBRARY_PATH="$GFOOTBALL_NATIVE_PREFIX/lib" uv build`.
+The image build runs `uv sync --locked`, which compiles the native engine and
+links it as `_gameplayfootball.so`.
 
-Run the checked-in default configuration with rendering:
+Run the checked-in default configuration with Docker off-screen rendering:
 
 ```sh
-uv run ./start_game.sh
+./start_game_docker.sh
 ```
 
-This expands to:
+This starts the `gfootball` Docker image with the default configuration and
+writes outputs under `./dumps`. Build the image first with `docker build -t
+gfootball .`.
 
-```sh
-python3 -m gfootball.play_game \
-  --config_file gfootball/configs/default.yaml \
-  --render=true
-```
-
-For the standard built-in configuration instead:
-
-```sh
-python3 -m gfootball.play_game --action_set=full
-```
-
-Stop play with Ctrl+C. Rendering requires a usable SDL/display environment.
+The entry point uses off-screen rendering. For visible X11 rendering or an
+interactive shell, see `gfootball/doc/docker.md`.
 
 # Test
 
-Tests are standalone `absltest`/`unittest` scripts under `gfootball/env`; there is no pytest/tox configuration. The CI-equivalent suite command on Unix is:
-
-```sh
-for test_file in gfootball/env/*test.py; do
-UNITTEST_IN_DOCKER=1 uv run python "$test_file" || exit 1
-done
-```
-
-`UNITTEST_IN_DOCKER=1` skips rendering-only wrapper tests and is useful on headless hosts. Run a single file or test method with:
-
-```sh
-UNITTEST_IN_DOCKER=1 uv run python gfootball/env/football_action_set_test.py
-UNITTEST_IN_DOCKER=1 uv run python -m unittest \
-  gfootball.env.football_action_set_test.FootballActionSetTest.test_action_set_full
-```
-
-The repository also provides an expensive Docker smoke test that builds Ubuntu images, runs all environment tests, and starts a short PPO2 training job:
+Tests are standalone `absltest`/`unittest` scripts under `gfootball/env`; there
+is no pytest/tox configuration. Run the Docker validation suite, which builds a
+clean image, runs every environment test headlessly, and runs an Xvfb rendering
+test:
 
 ```sh
 ./run_docker_test.sh
@@ -88,7 +51,7 @@ No formatter, linter, pre-commit hook, or style CI is configured. Preserve the s
 
 - `gfootball/env/`: Gym environment, core engine bridge, actions, observations, wrappers, players, and unit/E2E tests.
 - `gfootball/scenarios/`: built-in scenario definitions; `gfootball/scenarios/tests/` contains deterministic scenarios consumed by environment tests, not a separate test runner.
-- `gfootball/configs/default.yaml`: configuration used by `start_game.sh`.
+- `gfootball/configs/default.yaml`: configuration used by `start_game_docker.sh`.
 - `gfootball/examples/`: PPO2/RLlib examples and reproduction scripts; these need optional legacy training dependencies not installed by the base package.
 - `gfootball/doc/`: API, build, Docker, observation/action, multi-agent, scenario, replay, and imitation-learning documentation.
 - `gfootball/eval_server/`: remote evaluation client/server protocol code; `*_pb2.py` and `*_pb2_grpc.py` are generated files.
@@ -107,5 +70,5 @@ No formatter, linter, pre-commit hook, or style CI is configured. Preserve the s
 - `GFOOTBALL_USE_PREBUILT_SO=1` makes Unix installation copy the checked-in prebuilt engine rather than compile it. Leave it unset when validating C++ changes.
 - Windows builds require `VCPKG_ROOT`; setup derives `PY_VERSION` and the CMake platform from the active interpreter.
 - Rendering is single-instance within a process. Headless tests should set `UNITTEST_IN_DOCKER=1`; Docker rendering additionally needs X11 access.
-- `start_game.sh` enables full episode dumps and video through `default.yaml`. Each run creates a timestamped directory below `/tmp/dumps` unless `tracesdir` is changed.
+- `start_game_docker.sh` enables full episode dumps and video through `default.yaml`. Each run creates a timestamped directory below `./dumps` on the host unless `tracesdir` is changed.
 - Do not hand-edit generated protobuf Python files; update their `.proto` sources and regenerate them with the appropriate protobuf tooling.

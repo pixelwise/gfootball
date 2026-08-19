@@ -1,8 +1,19 @@
 #!/bin/bash
-set -e
-docker build --build-arg DOCKER_BASE=ubuntu:20.04 . -t gfootball_docker_test
-docker run --gpus all -v /tmp/.X11-unix:/tmp/.X11-unix:rw --entrypoint bash -it gfootball_docker_test -c 'set -e; for x in `find gfootball/env -name *_test.py`; do UNITTEST_IN_DOCKER=1 PYTHONPATH=/ python3 $x; done'
 
-docker build --build-arg DOCKER_BASE=ubuntu:18.04 . -t gfootball_docker_test -f Dockerfile_examples
-docker run -v /tmp/.X11-unix:/tmp/.X11-unix:rw --gpus all --entrypoint python3 -it gfootball_docker_test gfootball/examples/run_ppo2.py --level=academy_empty_goal_close --num_timesteps=10000
-echo "Test successful!!!"
+set -euo pipefail
+
+IMAGE_TAG="gfootball_docker_test"
+
+docker build --no-cache -t "${IMAGE_TAG}" .
+docker run --rm "${IMAGE_TAG}" bash -lc \
+  'set -e; for test_file in gfootball/env/*test.py; do \
+     UNITTEST_IN_DOCKER=1 uv run --locked python "$test_file"; \
+   done'
+
+# Rendering is tested with a virtual X server, so no host GPU or X11 access is
+# required.
+docker run --rm "${IMAGE_TAG}" xvfb-run -a \
+  uv run --locked python -m unittest \
+  gfootball.env.football_env_test.FootballEnvTest.test___render
+
+echo "Docker tests successful."

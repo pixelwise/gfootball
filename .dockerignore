@@ -1,4 +1,6 @@
 .git/
+.venv/
+gfootball_engine/
 
 # Output directories
 build*/
@@ -13,6 +15,7 @@ third_party/gfootball_engine/build*/
 # Some Python directories
 gfootball.egg-info/
 dist/
+dumps/
 football-env*/
 # in case someone named virtual environment differently
 **/site-packages/
