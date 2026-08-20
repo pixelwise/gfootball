@@ -11,7 +11,7 @@ render_resolution_x: 1280
 render_resolution_y: 720
 real_time: false
 tracesdir: "/tmp/dumps"
-video_format: "avi"
+video_format: "mp4"
 video_quality_level: 0
 write_video: true
 write_segmentation_video: true

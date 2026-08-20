@@ -78,6 +78,65 @@ class ObservationProcessorTest(absltest.TestCase):
         np.testing.assert_array_equal(ball_data['frame_size'], [8, 6])
         self.assertEqual(video_frames, len(ball_data['xy']))
 
+  def test_active_dump_writes_mp4_video(self):
+    with tempfile.TemporaryDirectory() as directory:
+      dump_config = config.Config({
+          'render_resolution_x': 32,
+          'render_resolution_y': 24,
+          'video_format': 'mp4',
+          'video_quality_level': 2,
+          'write_video': True,
+      })
+      name = os.path.join(directory, 'episode_done_test')
+      active_dump = observation_processor.ActiveDump(name, 2, dump_config)
+      frame = np.zeros((24, 32, 3), dtype=np.uint8)
+
+      active_dump.add_frame(frame)
+      active_dump.add_frame(frame)
+      dump_info = active_dump.finalize()
+
+      self.assertEqual(name + '.mp4', dump_info['video'])
+      video = cv2.VideoCapture(dump_info['video'])
+      self.assertTrue(video.isOpened())
+      self.assertEqual(2, int(video.get(cv2.CAP_PROP_FRAME_COUNT)))
+      ok, decoded_frame = video.read()
+      video.release()
+      self.assertTrue(ok)
+      self.assertEqual((24, 32, 3), decoded_frame.shape)
+
+  def test_mp4_format_applies_to_segmentation_videos(self):
+    with tempfile.TemporaryDirectory() as directory:
+      dump_config = config.Config({
+          'render_resolution_x': 32,
+          'render_resolution_y': 24,
+          'video_format': 'mp4',
+          'video_quality_level': 2,
+          'write_segmentation_video': True,
+          'write_instance_segmentation_video': True,
+      })
+      name = os.path.join(directory, 'episode_done_test')
+      active_dump = observation_processor.ActiveDump(name, 2, dump_config)
+      labels = np.zeros((24, 32, 3), dtype=np.uint8)
+      labels[:, :16] = 17
+
+      active_dump.add_frame(np.zeros_like(labels), labels, engine_step=10)
+      active_dump.add_frame(np.zeros_like(labels), labels, engine_step=20)
+      dump_info = active_dump.finalize()
+
+      expected_videos = {
+          'segmentation_video': name + '_segmentation.mp4',
+          'instance_segmentation_video': name + '_instances.mp4',
+      }
+      for key, expected_name in expected_videos.items():
+        self.assertEqual(expected_name, dump_info[key])
+        video = cv2.VideoCapture(expected_name)
+        self.assertTrue(video.isOpened())
+        self.assertEqual(2, int(video.get(cv2.CAP_PROP_FRAME_COUNT)))
+        ok, decoded_frame = video.read()
+        video.release()
+        self.assertTrue(ok)
+        self.assertEqual((24, 32, 3), decoded_frame.shape)
+
   def test_active_dump_writes_lossless_segmentation_video(self):
     with tempfile.TemporaryDirectory() as directory:
       dump_config = config.Config({

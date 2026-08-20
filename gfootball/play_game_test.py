@@ -49,6 +49,15 @@ class PlayGameTest(unittest.TestCase):
     with self.assertRaises(ValidationError):
       play_game.GameConfig(episodes=-1)
 
+  def test_mp4_is_a_valid_video_format(self):
+    game_config = play_game.GameConfig(video_format='mp4')
+
+    self.assertEqual('mp4', game_config.video_format)
+
+  def test_unknown_video_format_is_rejected(self):
+    with self.assertRaises(ValidationError):
+      play_game.GameConfig(video_format='mov')
+
 
 if __name__ == '__main__':
   unittest.main()

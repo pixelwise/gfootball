@@ -59,6 +59,19 @@ def resize_instance_segmentation_frame(frame, frame_dim):
                     interpolation=cv2.INTER_NEAREST).astype(np.uint8)
 
 
+def _video_fourcc(video_format, video_quality_level, lossless=False):
+  """Returns the OpenCV codec identifier for a configured video format."""
+  if video_format == 'avi':
+    if lossless or video_quality_level == 2:
+      return cv2.VideoWriter_fourcc('p', 'n', 'g', ' ')
+    if video_quality_level == 1:
+      return cv2.VideoWriter_fourcc(*'MJPG')
+    return cv2.VideoWriter_fourcc(*'XVID')
+  if video_format == 'webm':
+    return cv2.VideoWriter_fourcc(*'vp80')
+  return cv2.VideoWriter_fourcc(*'mp4v')
+
+
 class DumpConfig(object):
 
   def __init__(self,
@@ -240,52 +253,70 @@ class ActiveDump(object):
     self._dump_file = None
     if (config['write_video'] or config['write_segmentation_video'] or
         config['write_instance_segmentation_video']):
+      video_format = config['video_format']
+      assert video_format in ['avi', 'webm', 'mp4']
+      self._video_suffix = '.%s' % video_format
       self._frame_dim = (
           config['render_resolution_x'], config['render_resolution_y'])
       if config['video_quality_level'] not in [1, 2]:
         # Reduce resolution to (800, 450).
         self._frame_dim = min(self._frame_dim, (800, 450))
     if config['write_video']:
-      video_format = config['video_format']
-      assert video_format in ['avi', 'webm']
-      self._video_suffix = '.%s' % video_format
       self._video_fd, self._video_tmp = tempfile.mkstemp(
           suffix=self._video_suffix)
-      if video_format == 'avi':
-        if config['video_quality_level'] == 2:
-          fcc = cv2.VideoWriter_fourcc('p', 'n', 'g', ' ')
-        elif config['video_quality_level'] == 1:
-          fcc = cv2.VideoWriter_fourcc(*'MJPG')
-        else:
-          fcc = cv2.VideoWriter_fourcc(*'XVID')
-      else:
-        fcc = cv2.VideoWriter_fourcc(*'vp80')
+      fcc = _video_fourcc(video_format, config['video_quality_level'])
 
       self._video_writer = cv2.VideoWriter(
           self._video_tmp, fcc,
           const.PHYSICS_STEPS_PER_SECOND / config['physics_steps_per_frame'],
           self._frame_dim)
+      self._ensure_video_writer_open(
+          '_video_writer', '_video_fd', '_video_tmp', video_format)
     if config['write_segmentation_video']:
       self._segmentation_video_fd, self._segmentation_video_tmp = \
-          tempfile.mkstemp(suffix='.avi')
-      mask_fcc = cv2.VideoWriter_fourcc('p', 'n', 'g', ' ')
+          tempfile.mkstemp(suffix=self._video_suffix)
+      mask_fcc = _video_fourcc(
+          video_format, config['video_quality_level'], lossless=True)
       self._segmentation_video_writer = cv2.VideoWriter(
           self._segmentation_video_tmp, mask_fcc,
           const.PHYSICS_STEPS_PER_SECOND / config['physics_steps_per_frame'],
           self._frame_dim)
+      self._ensure_video_writer_open(
+          '_segmentation_video_writer', '_segmentation_video_fd',
+          '_segmentation_video_tmp', video_format)
     if config['write_instance_segmentation_video']:
       self._instance_video_fd, self._instance_video_tmp = \
-          tempfile.mkstemp(suffix='.avi')
-      instance_fcc = cv2.VideoWriter_fourcc('p', 'n', 'g', ' ')
+          tempfile.mkstemp(suffix=self._video_suffix)
+      instance_fcc = _video_fourcc(
+          video_format, config['video_quality_level'], lossless=True)
       self._instance_video_writer = cv2.VideoWriter(
           self._instance_video_tmp, instance_fcc,
           const.PHYSICS_STEPS_PER_SECOND / config['physics_steps_per_frame'],
           self._frame_dim)
+      self._ensure_video_writer_open(
+          '_instance_video_writer', '_instance_video_fd',
+          '_instance_video_tmp', video_format)
     if WRITE_FILES:
       self._dump_file = open(name + '.dump', 'wb')
 
   def __del__(self):
     self.finalize()
+
+  def _ensure_video_writer_open(
+      self, writer_attribute, fd_attribute, tmp_attribute, video_format):
+    """Cleans up and raises when OpenCV cannot create a video writer."""
+    writer = getattr(self, writer_attribute)
+    if writer.isOpened():
+      return
+    writer.release()
+    setattr(self, writer_attribute, None)
+    os.close(getattr(self, fd_attribute))
+    setattr(self, fd_attribute, None)
+    os.remove(getattr(self, tmp_attribute))
+    setattr(self, tmp_attribute, None)
+    raise RuntimeError(
+        'Unable to open %s video writer. Check that the OpenCV video backend '
+        'supports this format.' % video_format)
 
   def _add_ball_coordinate(self, ball_screen_position, visible, engine_step):
     """Adds one ball record in final-video pixel coordinates."""
@@ -457,7 +488,7 @@ class ActiveDump(object):
       self._segmentation_video_writer = None
       os.close(self._segmentation_video_fd)
       try:
-        segmentation_video = self._name + '_segmentation.avi'
+        segmentation_video = self._name + '_segmentation' + self._video_suffix
         if WRITE_FILES:
           shutil.move(self._segmentation_video_tmp, segmentation_video)
         dump_info['segmentation_video'] = segmentation_video
@@ -469,7 +500,7 @@ class ActiveDump(object):
       self._instance_video_writer = None
       os.close(self._instance_video_fd)
       try:
-        instance_video = self._name + '_instances.avi'
+        instance_video = self._name + '_instances' + self._video_suffix
         if WRITE_FILES:
           shutil.move(self._instance_video_tmp, instance_video)
         dump_info['instance_segmentation_video'] = instance_video
