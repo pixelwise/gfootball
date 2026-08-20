@@ -32,7 +32,11 @@ out vec4 stdout;
 
 // http://mouaif.wordpress.com/2009/01/05/photoshop-math-with-glsl-shaders/
 
-#define GammaCorrection(color, gamma) pow(color, 1.0 / gamma)
+vec3 LinearToSRGB(vec3 color) {
+  vec3 lower = color * 12.92;
+  vec3 upper = 1.055 * pow(color, vec3(1.0 / 2.4)) - 0.055;
+  return mix(lower, upper, step(vec3(0.0031308), color));
+}
 
 // For all settings: 1.0 = 100% 0.5=50% 1.5 = 150%
 vec3 ContrastSaturationBrightness(vec3 color, float brt, float con, float sat) {
@@ -133,16 +137,10 @@ void main(void) {
   float contrastBias = 0.3f;//0.1f; // 0 == normal .. 1 == 'fake hdri'
   float saturation = 0.95f * (0.4f + SSAO * 0.6f); // SSAO shadows are less saturated
 
-  // now happens automagically because of glEnable(GL_FRAMEBUFFER_SRGB)
-/*
-  fragColor.r = GammaCorrection(fragColor.r, gamma);
-  fragColor.g = GammaCorrection(fragColor.g, gamma);
-  fragColor.b = GammaCorrection(fragColor.b, gamma);
-*/
-
   fragColor = ContrastSaturationBrightness(fragColor, brightness, 1.0f, saturation);
   fragColor = AlternateContrast(fragColor, contrastBias);
   fragColor = clamp(fragColor, 0.0, 1.0);
+  fragColor = LinearToSRGB(fragColor);
 
   //gl_FragColor = vec4(fragColor, 0);
   //fragColor = vec3(0, 0.5, 1.0);

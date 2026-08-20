@@ -499,9 +499,7 @@ void GraphicsCamera::SetPosition(const Vector3 &newPosition) {
     renderer->SetDepthTesting(false);
     renderer->SetDepthMask(false);
 
-    renderer->SetFramebufferGammaCorrection(true);
     renderer->RenderOverlay2D();
-    renderer->SetFramebufferGammaCorrection(false);
 
     renderer->SetTextureUnit(2);
     renderer->BindTexture(0);
