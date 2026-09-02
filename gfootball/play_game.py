@@ -26,6 +26,7 @@ from enum import Enum
 
 import tempfile
 import yaml
+import cv2
 
 from absl import app
 from absl import flags
@@ -82,6 +83,7 @@ class GameConfig(BaseSettings):
   write_segmentation_video: bool = True
   write_instance_segmentation_video: bool = False
   write_ball_coordinates: bool = False
+  write_single_frame: bool = False
   game_engine_random_seed: int = 48
   display_settings: DisplaySettings = Field(default_factory=DisplaySettings)
 
@@ -121,6 +123,14 @@ def run_episodes(env, episodes: int) -> None:
       env.reset()
 
 
+def write_single_frame(env, output: Path) -> None:
+  """Renders the initial state and writes it as a PNG."""
+  env.reset()
+  frame = env.render(mode='rgb_array')
+  if not cv2.imwrite(str(output), frame):
+    raise RuntimeError(f'Could not write frame to {format(output)}')
+
+
 def main(_):
 
   if FLAGS.config_file:
@@ -137,14 +147,19 @@ def main(_):
   env_cfg = config.Config(cfg_values)
   env = football_env.FootballEnv(env_cfg)
 
-  if FLAGS.render:
-    env.render()
   try:
+    if cfg.write_single_frame:
+      write_single_frame(env, cfg.tracesdir / 'debug_frame.png')
+      return
+    if FLAGS.render:
+      env.render()
     run_episodes(env, cfg.episodes)
   except KeyboardInterrupt:
     logging.warning('Game stopped, writing dump...')
     env.write_dump('shutdown')
     exit(1)
+  finally:
+    env.close()
 
 
 if __name__ == '__main__':

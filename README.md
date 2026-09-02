@@ -39,6 +39,18 @@ dumps/videos to `./dumps`. The start script supports Docker and Podman. See
 [running in Docker](gfootball/doc/docker.md) for container shells, visible X11
 rendering, and validation commands.
 
+### Capture a debug frame
+
+Set `write_single_frame: true` in the YAML configuration and run:
+
+```shell
+./start_game_docker.sh
+```
+
+The runner writes the initial rendered frame to
+`dumps/episode-<timestamp>/debug_frame.png` and exits. Set
+`write_single_frame: false` to run normal episodes instead.
+
 # Contents #
 
 * [Running training](#training-agents-to-play-GRF)
