@@ -72,7 +72,8 @@ Uint32 GetPitchDiffuseColor(SDL_Surface *pitchSurf, Vector3 *seamlessTex,
 
   float r, g, b;
 
-  float contrast = 0.4f; // g <=> rb contrast. lower = less saturation, higher = greener
+  // Balanced turf green: keep luminance stable while reducing red and blue.
+  float contrast = 1.0f; // g <=> rb contrast. lower = less saturation, higher = greener
   float rToB = GetConfiguration()->GetReal("graphics_pitchredtoblueratio", 0.5f) * 2.0f; // 0 .. 2, higher is more red, lower is more blue
   r = ((35 - contrast * 10) * rToB ) * brightness;
   g = 46 * brightness;
