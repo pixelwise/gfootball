@@ -27,6 +27,28 @@ class FootballEnvCoreTest(absltest.TestCase):
     self.assertEqual(football_env_core.CameraType.PANO.value, 'pano')
     self.assertEqual(football_env_core.CAMERA_MAP['pano'], libgame.CameraType.PANO)
 
+  def test_static_side_camera_mappings(self):
+    self.assertEqual(
+        football_env_core.CameraType.STATIC_SIDE_0.value, 'static-side-0')
+    self.assertEqual(
+        football_env_core.CAMERA_MAP['static-side-0'],
+        libgame.CameraType.STATIC_SIDE_0)
+    self.assertEqual(
+        football_env_core.CameraType.STATIC_SIDE_1.value, 'static-side-1')
+    self.assertEqual(
+        football_env_core.CAMERA_MAP['static-side-1'],
+        libgame.CameraType.STATIC_SIDE_1)
+    self.assertEqual(
+        football_env_core.CameraType.STATIC_SIDE_2.value, 'static-side-2')
+    self.assertEqual(
+        football_env_core.CAMERA_MAP['static-side-2'],
+        libgame.CameraType.STATIC_SIDE_2)
+    self.assertEqual(
+        football_env_core.CameraType.STATIC_SIDE_3.value, 'static-side-3')
+    self.assertEqual(
+        football_env_core.CAMERA_MAP['static-side-3'],
+        libgame.CameraType.STATIC_SIDE_3)
+
 
 if __name__ == '__main__':
   absltest.main()

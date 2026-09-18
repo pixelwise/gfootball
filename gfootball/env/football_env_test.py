@@ -35,6 +35,7 @@ from absl.testing import absltest
 from gfootball.env import config
 from gfootball.env import football_action_set
 from gfootball.env import football_env
+from gfootball.env import football_env_core
 from gfootball.env import wrappers
 from gfootball.env import scenario_builder
 import numpy as np
@@ -303,6 +304,64 @@ class FootballEnvTest(parameterized.TestCase):
     frame = env.render(mode='rgb_array')
     self.assertEqual(frame.shape, (height, width, 3))
     env.close()
+
+  def test_static_side_segmentation_matches_render_output(self):
+    """Checks calibrated cameras produce valid aligned auxiliary output."""
+    if 'UNITTEST_IN_DOCKER' in os.environ:
+      # Rendering is not supported without the Xvfb validation pass.
+      return
+    width = 320
+    height = 180
+    expected_ball_positions = {
+        'static-side-0': (1.0257, 0.1741),
+        'static-side-1': (0.6268, 0.3158),
+        'static-side-2': (0.3751, 0.3166),
+        'static-side-3': (-0.0190, 0.1818),
+    }
+    for camera in ('static-side-0', 'static-side-1', 'static-side-2',
+                   'static-side-3'):
+      with self.subTest(camera=camera):
+        cfg = config.Config({
+            'camera': camera,
+            'level': 'tests.11_vs_11_hard_deterministic',
+            'render_resolution_x': width,
+            'render_resolution_y': height,
+            'write_segmentation_video': True,
+        })
+        env = football_env.FootballEnv(cfg)
+        try:
+          env.render()
+          env.reset()
+          observation = env._env.observation()
+          frame = observation['frame']
+          segmentation = observation['segmentation_frame']
+
+          self.assertEqual(frame.shape, (height, width, 3))
+          self.assertEqual(segmentation.shape, frame.shape)
+          np.testing.assert_array_equal(segmentation[:, :, 0],
+                                        segmentation[:, :, 1])
+          np.testing.assert_array_equal(segmentation[:, :, 1],
+                                        segmentation[:, :, 2])
+          labels = np.unique(segmentation[:, :, 0])
+          self.assertEqual(labels[0], 0)
+          self.assertTrue(np.any(labels > 0))
+          self.assertTrue(np.all(labels <= 22))
+
+          np.testing.assert_allclose(
+              observation['ball_screen_position'],
+              expected_ball_positions[camera], atol=0.002)
+          if observation['ball_screen_visible']:
+            ball_position = observation['ball_screen_position']
+            self.assertGreaterEqual(ball_position[0], 0.0)
+            self.assertLess(ball_position[0], 1.0)
+            self.assertGreaterEqual(ball_position[1], 0.0)
+            self.assertLess(ball_position[1], 1.0)
+        finally:
+          env.close()
+          # Rendering engines cache immutable game configuration. Force the
+          # next subtest to construct an engine for its calibrated camera.
+          football_env_core._unused_rendering_engine = None
+          football_env_core._unused_engines = []
 
   def test_dynamic_render(self):
     """Verifies dynamic render support."""
