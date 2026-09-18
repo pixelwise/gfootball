@@ -65,6 +65,7 @@ The runner writes the initial rendered frame to
 * [Multi-agent support](gfootball/doc/multi_agent.md)
 * [Running in docker](gfootball/doc/docker.md)
 * [Saving replays, logs, traces](gfootball/doc/saving_replays.md)
+* [Real-lens camera calibration and distortion](gfootball/doc/camera_lens_calibration.md)
 * [Imitation Learning](gfootball/doc/imitation.md)
 
 ## Training agents to play GRF
