@@ -21,6 +21,7 @@
 
 #include "../../../systems/graphics/rendering/r3d_messages.hpp"
 #include "../../../main.hpp"
+#include "../../../utils.hpp"
 
 #include "../graphics_scene.hpp"
 #include "../graphics_system.hpp"
@@ -251,15 +252,32 @@ void GraphicsCamera::SetPosition(const Vector3 &newPosition) {
       depthParamNear = buffer.cameraFarCap / (buffer.cameraFarCap - buffer.cameraNearCap);
     }
 
+    const LensCalibration lensCalibration =
+        GetLensCalibration(GetGameConfig().camera);
+    auto configurePostprocessLens = [&]() {
+      renderer->SetUniformFloat2("postprocess", "lensDistortion",
+                                 lensCalibration.k1, lensCalibration.k2);
+      // Texture coordinates use an OpenGL bottom-left origin, while the
+      // recording calibration and screen-space observations use top-left.
+      renderer->SetUniformFloat2("postprocess", "lensCenter",
+                                 lensCalibration.center_x,
+                                 1.0f - lensCalibration.center_y);
+      renderer->SetUniformFloat("postprocess", "lensAspect",
+                                lensCalibration.aspect);
+      renderer->SetUniformFloat("postprocess", "lensUndistortScale",
+                                lensCalibration.undistort_scale);
+    };
+
     std::vector<e_TargetAttachment> targets;
 
     if (GetGameConfig().render_segmentation) {
-      renderer->BindFrameBuffer(0);
-      targets.push_back(e_TargetAttachment_Back);
+      // Render discrete labels into the existing off-screen color target so
+      // they can pass through the same lens mapping as the RGB image.
+      renderer->BindFrameBuffer(view.gBufferID);
+      targets.push_back(e_TargetAttachment_Color0);
       renderer->SetRenderTargets(targets);
       targets.clear();
-      renderer->SetViewport(view.x, height - (view.y + view.height),
-                            view.width, view.height);
+      renderer->SetViewport(0, 0, view.width, view.height);
       renderer->UseShader("zphase");
       renderer->SetMatrix("projectionMatrix", projectionMatrix);
       renderer->SetMatrix("viewMatrix", viewMatrix);
@@ -283,6 +301,32 @@ void GraphicsCamera::SetPosition(const Vector3 &newPosition) {
       renderer->SetDepthMask(false);
       renderer->RenderVertexBuffer(playerGeometry, e_RenderMode_GeometryOnly);
       renderer->SetDepthMask(true);
+
+      renderer->BindFrameBuffer(0);
+      targets.push_back(e_TargetAttachment_Back);
+      renderer->SetRenderTargets(targets);
+      targets.clear();
+      renderer->SetViewport(view.x, height - (view.y + view.height),
+                            view.width, view.height);
+      renderer->UseShader("postprocess");
+      renderer->SetUniformFloat("postprocess", "contextWidth",
+                                (float)view.width);
+      renderer->SetUniformFloat("postprocess", "contextHeight",
+                                (float)view.height);
+      renderer->SetUniformFloat("postprocess", "contextX", (float)view.x);
+      renderer->SetUniformFloat(
+          "postprocess", "contextY",
+          (float)(height - (view.y + view.height)));
+      configurePostprocessLens();
+      renderer->SetUniformInt("postprocess", "segmentationMode", 1);
+      renderer->SetTextureUnit(0);
+      renderer->BindTexture(view.gBuffer_AlbedoTexID);
+      renderer->SetBlendingMode(e_BlendingMode_Off);
+      renderer->SetDepthTesting(false);
+      renderer->SetDepthMask(false);
+      renderer->RenderOverlay2D();
+      renderer->SetDepthMask(true);
+      renderer->BindTexture(0);
       renderer->CaptureSegmentationScreen();
     }
 
@@ -486,6 +530,8 @@ void GraphicsCamera::SetPosition(const Vector3 &newPosition) {
     renderer->SetUniformFloat("postprocess", "contextY", (float)(height - (view.y + view.height)));
     renderer->SetUniformFloat2("postprocess", "cameraClip", depthParamNear, depthParamFar);
     renderer->SetUniformFloat("postprocess", "fogScale", 0.8f - NormalizedClamp(buffer.cameraFOV, 20, 100) * 0.6f);
+    configurePostprocessLens();
+    renderer->SetUniformInt("postprocess", "segmentationMode", 0);
 
     renderer->SetViewport(view.x, height - (view.y + view.height), view.width, view.height);
 

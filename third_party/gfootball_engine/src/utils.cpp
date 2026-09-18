@@ -89,6 +89,80 @@ Vector3 GetProjectedCoord(const Vector3 &pos3D,
   return result;
 }
 
+LensCalibration GetLensCalibration(CameraType camera) {
+  LensCalibration calibration;
+  if (camera != CameraType::STATIC_SIDE_0 &&
+      camera != CameraType::STATIC_SIDE_1 &&
+      camera != CameraType::STATIC_SIDE_2 &&
+      camera != CameraType::STATIC_SIDE_3) {
+    return calibration;
+  }
+
+  // the following parameters are extracted from a sample recording
+  // from the Wolfsburg server:
+  // "/data/non-www/permanent-data/recordings/WolfsburgServer/4fe34067-e277-447a-af7e-9e565efad535"
+
+  calibration.enabled = true;
+  calibration.k1 = -0.31888890f;
+  calibration.k2 = 0.09000000f;
+  calibration.aspect = 0.5625f;
+  if (camera == CameraType::STATIC_SIDE_0) {
+    calibration.center_x = 0.49440938f;
+    calibration.center_y = 0.50254971f;
+    calibration.undistort_scale = 0.70959521f;
+  } else if (camera == CameraType::STATIC_SIDE_1) {
+    calibration.center_x = 0.49967515f;
+    calibration.center_y = 0.50241035f;
+    calibration.undistort_scale = 0.71408503f;
+  } else if (camera == CameraType::STATIC_SIDE_2) {
+    calibration.center_x = 0.50138474f;
+    calibration.center_y = 0.50205743f;
+    calibration.undistort_scale = 0.71458701f;
+  } else {
+    calibration.center_x = 0.50848764f;
+    calibration.center_y = 0.50017411f;
+    calibration.undistort_scale = 0.70555054f;
+  }
+  return calibration;
+}
+
+Vector3 DistortNormalizedCoordinate(const Vector3 &coordinate,
+                                    const LensCalibration &calibration) {
+  if (!calibration.enabled) return coordinate;
+
+  const float delta_x = coordinate.coords[0] - 0.5f;
+  const float delta_y = coordinate.coords[1] - 0.5f;
+  const float normalization =
+      4.0f / (calibration.aspect * calibration.aspect + 1.0f);
+  const float source_radius =
+      std::sqrt((delta_x * delta_x * calibration.aspect *
+                     calibration.aspect +
+                 delta_y * delta_y) *
+                normalization);
+
+  Vector3 result = coordinate;
+  if (source_radius < 0.000001f) {
+    result.coords[0] = calibration.center_x;
+    result.coords[1] = calibration.center_y;
+    return result;
+  }
+
+  // This is the forward counterpart of UndistortLensCoordinate in the
+  // postprocess shader. The source pinhole radius was scaled when rendering
+  // the wider intermediate image; restore it before applying radial lens
+  // distortion.
+  const float radius = source_radius / calibration.undistort_scale;
+  const float radius2 = radius * radius;
+  const float radial_scale =
+      1.0f + calibration.k1 * radius2 +
+      calibration.k2 * radius2 * radius2;
+  const float coordinate_scale =
+      radial_scale / calibration.undistort_scale;
+  result.coords[0] = calibration.center_x + delta_x * coordinate_scale;
+  result.coords[1] = calibration.center_y + delta_y * coordinate_scale;
+  return result;
+}
+
 int GetVelocityID(e_Velocity velo, bool treatDribbleAsWalk) {
   DO_VALIDATION;
   int id = 0;

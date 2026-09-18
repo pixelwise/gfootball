@@ -28,6 +28,12 @@ uniform vec2 cameraClip;
 
 uniform float fogScale;
 
+uniform vec2 lensDistortion;
+uniform vec2 lensCenter;
+uniform float lensAspect;
+uniform float lensUndistortScale;
+uniform int segmentationMode;
+
 out vec4 stdout;
 
 // http://mouaif.wordpress.com/2009/01/05/photoshop-math-with-glsl-shaders/
@@ -68,6 +74,31 @@ vec3 Compress(vec3 color, float startThreshold, float endThreshold) {
   return color;
 }
 
+vec2 UndistortLensCoordinate(vec2 distorted) {
+  vec2 delta = distorted - lensCenter;
+  float normalization = 4.0 / (lensAspect * lensAspect + 1.0);
+  float distortedRadius =
+      sqrt((delta.x * delta.x * lensAspect * lensAspect +
+            delta.y * delta.y) * normalization);
+  if (distortedRadius < 0.000001) {
+    return vec2(0.5);
+  }
+
+  // Invert rd = r * (1 + k1*r^2 + k2*r^4), matching camcalib's model.
+  float radius = distortedRadius;
+  for (int i = 0; i < 12; ++i) {
+    float radius2 = radius * radius;
+    float radialScale = 1.0 + lensDistortion.x * radius2 +
+                        lensDistortion.y * radius2 * radius2;
+    radius = distortedRadius / radialScale;
+  }
+
+  // The source pinhole render has a wider FOV than the physical lens. This
+  // scale converts its coordinates back to the calibrated sensor projection.
+  return vec2(0.5) + delta * (radius / distortedRadius) *
+                         lensUndistortScale;
+}
+
 
 void main(void) {
   vec2 texCoord = gl_FragCoord.xy;
@@ -75,6 +106,20 @@ void main(void) {
   texCoord.y -= contextY;
   texCoord.x /= contextWidth;
   texCoord.y /= contextHeight;
+
+  if (lensUndistortScale > 0.0) {
+    texCoord = UndistortLensCoordinate(texCoord);
+  }
+
+  if (segmentationMode != 0) {
+    // Labels are categorical values. Match nearest texture sampling explicitly
+    // so the warp never introduces IDs between adjacent players/background.
+    ivec2 sourceSize = textureSize(map_accumulation, 0);
+    ivec2 sourcePixel = ivec2(floor(texCoord * vec2(sourceSize)));
+    sourcePixel = clamp(sourcePixel, ivec2(0), sourceSize - ivec2(1));
+    stdout = texelFetch(map_accumulation, sourcePixel, 0);
+    return;
+  }
 
   vec4 accum = texture(map_accumulation, texCoord);
   vec3 base = accum.rgb;

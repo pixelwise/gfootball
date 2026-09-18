@@ -28,6 +28,7 @@
 #include "../menu/startmatch/loadingmatch.hpp"
 #include "../scene/objectfactory.hpp"
 #include "../scene/objects/light.hpp"
+#include "../utils.hpp"
 #include "../utils/splitgeometry.hpp"
 #include "AIsupport/AIfunctions.hpp"
 #include "file.h"
@@ -584,7 +585,11 @@ void Match::UpdateIngameCamera() {
     cameraNearCap = 5.0f;
     cameraFarCap = 300.0f;
 
-  } else if (!IsGoalScored() ||
+  } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_0 ||
+             GetGameConfig().camera == CameraType::STATIC_SIDE_1 ||
+             GetGameConfig().camera == CameraType::STATIC_SIDE_2 ||
+             GetGameConfig().camera == CameraType::STATIC_SIDE_3 ||
+             !IsGoalScored() ||
              (IsGoalScored() && goalScoredTimer < 1000)) {
     DO_VALIDATION;
 
@@ -643,14 +648,74 @@ void Match::UpdateIngameCamera() {
     } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_0) {
       DO_VALIDATION;
 
-      // side cam, slightly panned to the left
+      // All the static camera side camera parameteres are obtained from the
+      // sample recording from the Wolfsburg server:
+      // "/data/non-www/permanent-data/recordings/WolfsburgServer/4fe34067-e277-447a-af7e-9e565efad535"
 
-      cameraOrientation.SetAngleAxis(0.32f * pi, Vector3(1, 0, 0));
-      cameraNodeOrientation.SetAngleAxis(0.3f * pi, Vector3(0, 0, 1));
+      // Calibrated Wolfsburg cam7_0. The matrix is the camera-to-world
+      // rotation obtained by decomposing the recording's perspective and
+      // per-camera projection matrices.
+      cameraOrientation = QUATERNION_IDENTITY;
+      cameraNodeOrientation.Set(Matrix3(
+          0.43947573f, -0.01746386f,  0.89808468f,
+          0.72682648f,  0.59439877f, -0.34411243f,
+         -0.52781090f,  0.80398079f,  0.27391703f));
 
-      cameraNodePosition = Vector3(0, -45.0f, 15.0f);
+      cameraNodePosition =
+          Vector3(0.13412166f, -39.63250069f, 13.84474775f);
 
-      cameraFOV = 90.0f;
+      cameraFOV = 99.40683f;
+      cameraNearCap = 5.0f;
+      cameraFarCap = 300.0f;
+
+    } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_1) {
+      DO_VALIDATION;
+
+      // Calibrated Wolfsburg cam7_1.
+      cameraOrientation = QUATERNION_IDENTITY;
+      cameraNodeOrientation.Set(Matrix3(
+          0.93237555f, -0.02762154f,  0.36043430f,
+          0.30722095f,  0.58599676f, -0.74981536f,
+         -0.19050227f,  0.80984248f,  0.55485497f));
+
+      cameraNodePosition =
+          Vector3(0.13412166f, -39.63250069f, 13.84474775f);
+
+      cameraFOV = 98.76896f;
+      cameraNearCap = 5.0f;
+      cameraFarCap = 300.0f;
+
+    } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_2) {
+      DO_VALIDATION;
+
+      // Calibrated Wolfsburg cam7_2.
+      cameraOrientation = QUATERNION_IDENTITY;
+      cameraNodeOrientation.Set(Matrix3(
+          0.92894101f, -0.02717736f, -0.36922891f,
+         -0.28441997f,  0.58606085f, -0.75870809f,
+          0.23701029f,  0.80981113f,  0.53668617f));
+
+      cameraNodePosition =
+          Vector3(0.13412166f, -39.63250069f, 13.84474775f);
+
+      cameraFOV = 99.10011f;
+      cameraNearCap = 5.0f;
+      cameraFarCap = 300.0f;
+
+    } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_3) {
+      DO_VALIDATION;
+
+      // Calibrated Wolfsburg cam7_3.
+      cameraOrientation = QUATERNION_IDENTITY;
+      cameraNodeOrientation.Set(Matrix3(
+          0.43615526f, -0.02779244f, -0.89944215f,
+         -0.72026378f,  0.58838843f, -0.36744952f,
+          0.53943367f,  0.80810064f,  0.23661082f));
+
+      cameraNodePosition =
+          Vector3(0.13412166f, -39.63250069f, 13.84474775f);
+
+      cameraFOV = 100.25191f;
       cameraNearCap = 5.0f;
       cameraFarCap = 300.0f;
 
@@ -866,9 +931,19 @@ void Match::GetState(SharedInfo *state) {
   if (GetGameConfig().render) {
     Vector3 ball_screen_position = GetProjectedCoord(
         ball->GetPosition(), camera, &state->ball_screen_visible);
+    ball_screen_position *= 0.01f;
+    ball_screen_position = DistortNormalizedCoordinate(
+        ball_screen_position,
+        GetLensCalibration(GetGameConfig().camera));
+    state->ball_screen_visible =
+        state->ball_screen_visible &&
+        ball_screen_position.coords[0] >= 0.0f &&
+        ball_screen_position.coords[0] < 1.0f &&
+        ball_screen_position.coords[1] >= 0.0f &&
+        ball_screen_position.coords[1] < 1.0f;
     state->ball_screen_position = {
-        ball_screen_position.coords[0] * 0.01f,
-        ball_screen_position.coords[1] * 0.01f,
+        ball_screen_position.coords[0],
+        ball_screen_position.coords[1],
     };
   }
   state->ball_rotation =
@@ -1058,6 +1133,10 @@ bool Match::Process() {
    }
 
    if (GetGameConfig().camera != CameraType::PANO &&
+       GetGameConfig().camera != CameraType::STATIC_SIDE_0 &&
+       GetGameConfig().camera != CameraType::STATIC_SIDE_1 &&
+       GetGameConfig().camera != CameraType::STATIC_SIDE_2 &&
+       GetGameConfig().camera != CameraType::STATIC_SIDE_3 &&
        GetReferee()->GetBuffer().active == true &&
        (GetReferee()->GetCurrentFoulType() == 2 ||
            GetReferee()->GetCurrentFoulType() == 3) &&
@@ -1096,6 +1175,10 @@ void Match::UpdateCamera() {
   unsigned int zoomTime = 2000;
   unsigned int startTime = 0;
   if (GetGameConfig().camera != CameraType::PANO &&
+      GetGameConfig().camera != CameraType::STATIC_SIDE_0 &&
+      GetGameConfig().camera != CameraType::STATIC_SIDE_1 &&
+      GetGameConfig().camera != CameraType::STATIC_SIDE_2 &&
+      GetGameConfig().camera != CameraType::STATIC_SIDE_3 &&
       actualTime_ms < zoomTime + startTime) {
     DO_VALIDATION;  // nice effect at the start
 

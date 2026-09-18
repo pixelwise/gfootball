@@ -26,11 +26,26 @@
 
 using namespace blunted;
 
+enum class CameraType;
+
+struct LensCalibration {
+  bool enabled = false;
+  float k1 = 0.0f;
+  float k2 = 0.0f;
+  float center_x = 0.5f;
+  float center_y = 0.5f;
+  float aspect = 1.0f;
+  float undistort_scale = 0.0f;
+};
+
 float GetQuantizedDirectionBias();
 void QuantizeDirection(Vector3 &inputDirection, float bias = 1.0f);
 Vector3 GetProjectedCoord(const Vector3 &pos3D,
                           boost::intrusive_ptr<Camera> camera,
                           bool *visible = nullptr);
+LensCalibration GetLensCalibration(CameraType camera);
+Vector3 DistortNormalizedCoordinate(const Vector3 &coordinate,
+                                    const LensCalibration &calibration);
 
 int GetVelocityID(e_Velocity velo, bool treatDribbleAsWalk = false);
 

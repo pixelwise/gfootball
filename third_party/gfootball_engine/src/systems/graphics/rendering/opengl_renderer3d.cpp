@@ -2317,6 +2317,7 @@ void OpenGLRenderer3D::LoadShader(const std::string &name,
     SetUniformFloat("postprocess", "contextY", (float)0.0);
     SetUniformFloat("postprocess", "contextWidth", (float)context_width);
     SetUniformFloat("postprocess", "contextHeight", (float)context_height);
+    SetUniformInt("postprocess", "segmentationMode", 0);
   }
 
   SetTextureUnit(0);

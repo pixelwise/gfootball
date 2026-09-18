@@ -66,6 +66,9 @@ enum class CameraType {
     BIRD_EYE,
     TELE,
     STATIC_SIDE_0,
+    STATIC_SIDE_1,
+    STATIC_SIDE_2,
+    STATIC_SIDE_3,
     STATIC_GOAL_0,
     PANO,
 };
