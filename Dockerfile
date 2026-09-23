@@ -3,9 +3,15 @@ FROM python:3.9-slim-bullseye
 ENV DEBIAN_FRONTEND=noninteractive \
     UV_LINK_MODE=copy
 
-RUN apt-get update && apt-get --no-install-recommends install -yq \
+RUN sed -i \
+      -e 's|http://deb.debian.org/debian-security|https://snapshot.debian.org/archive/debian-security/20260901T000000Z|' \
+      -e 's|http://deb.debian.org/debian|https://snapshot.debian.org/archive/debian/20260901T000000Z|' \
+      /etc/apt/sources.list \
+ && apt-get -o Acquire::Check-Valid-Until=false update \
+ && apt-get --no-install-recommends install -yq \
     build-essential \
     cmake \
+    ffmpeg \
     libboost-all-dev \
     libdirectfb-dev \
     libegl1-mesa-dev \

@@ -17,12 +17,24 @@
 #include "onthepitch/match.hpp"
 #include "gamedefines.hpp"
 #include "gfootball_actions.h"
+#include <map>
+#include <vector>
 #include "main.hpp"
 
 class AIControlledKeyboard;
 class GameTask;
 
 typedef std::vector<std::string> StringVector;
+struct CameraCapture {
+  screenshoot frame;
+  screenshoot segmentation_frame;
+  std::vector<float> ball_screen_position;
+  bool ball_screen_visible = false;
+  int engine_step = -1;
+};
+
+typedef std::vector<CameraType> CameraTypeVector;
+
 
 class ContextHolder {
  public:
@@ -52,6 +64,13 @@ struct GameEnv {
   // Get the current rendered frame.
   screenshoot get_frame();
   screenshoot get_segmentation_frame();
+  void set_render_cameras(const CameraTypeVector& cameras);
+  screenshoot get_frame_for_camera(CameraType camera);
+  screenshoot get_segmentation_frame_for_camera(CameraType camera);
+  std::vector<float> get_ball_screen_position_for_camera(CameraType camera);
+  bool get_ball_screen_visible_for_camera(CameraType camera);
+  int get_capture_engine_step_for_camera(CameraType camera);
+
 
   // Executes the action inside the game.
   bool sticky_action_state(int action, bool left_team, int player);
@@ -69,12 +88,16 @@ struct GameEnv {
   void setConfig(ScenarioConfig& scenario_config);
   void do_step(int count);
   void getObservations();
+  const CameraCapture& get_camera_capture(CameraType camera) const;
+  void update_capture_engine_steps();
   AIControlledKeyboard* keyboard_ = nullptr;
   bool disable_graphics_ = false;
   int last_step_rendered_frames_ = 1;
  public:
   ScenarioConfig scenario_config;
   GameConfig game_config;
+  CameraTypeVector render_cameras_;
+  std::map<CameraType, CameraCapture> camera_captures_;
   GameContext* context = nullptr;
   GameState state = game_created;
   int waiting_for_game_count = 0;

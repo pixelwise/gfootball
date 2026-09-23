@@ -223,6 +223,7 @@ namespace blunted {
       virtual void DisableContext() = 0;
       virtual const screenshoot& GetScreen() = 0;
       virtual const screenshoot& GetSegmentationScreen() = 0;
+      virtual void CaptureScreen() = 0;
       virtual void CaptureSegmentationScreen() = 0;
 
       virtual void SwapBuffers() = 0;
@@ -330,6 +331,7 @@ namespace blunted {
       DO_VALIDATION;
       return segmentation_screen_;
     }
+    virtual void CaptureScreen() { DO_VALIDATION; }
     virtual void CaptureSegmentationScreen() { DO_VALIDATION; }
     virtual ~MockRenderer3D() { DO_VALIDATION;};
 

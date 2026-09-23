@@ -42,6 +42,13 @@ _unused_engines = []
 _unused_rendering_engine = None
 _active_rendering = False
 
+_PIXEL_OBSERVATION_FIELDS = frozenset([
+    'frame',
+    'segmentation_frame',
+    'camera_frames',
+    'camera_segmentation_frames',
+])
+
 try:
   import cv2
 except ImportError:
@@ -84,15 +91,40 @@ CAMERA_MAP = {
 
 class FootballEnvCore(object):
 
+  @staticmethod
+  def _copy_observation(observation):
+    """Copies gameplay state without duplicating large rendered frames."""
+    result = {}
+    for key, value in observation.items():
+      if key in _PIXEL_OBSERVATION_FIELDS:
+        if isinstance(value, dict):
+          result[key] = value.copy()
+        else:
+          result[key] = value
+      else:
+        result[key] = copy.deepcopy(value)
+    return result
+
   def __init__(self, config):
     global _unused_engines
     self._config = config
+    configured_cameras = (
+        config['cameras'] if 'cameras' in config and config['cameras']
+        else [config['camera']])
+    self._cameras = [CameraType(camera) for camera in configured_cameras]
+    if not self._cameras:
+      raise ValueError('cameras must contain at least one camera')
+    if len(set(self._cameras)) != len(self._cameras):
+      raise ValueError('cameras must not contain duplicates')
+    self._config['camera'] = self._cameras[0].value
     self._sticky_actions = football_action_set.get_sticky_actions(config)
     self._use_rendering_engine = False
     if _unused_engines:
       self._env = _unused_engines.pop()
     else:
       self._env = self._get_new_env()
+    self._env.set_render_cameras(
+        [CAMERA_MAP[camera] for camera in self._cameras])
     # Reset is needed here to make sure render() API call before reset() API
     # call works fine (get/setState makes sure env. config is the same).
     self.reset(inc=0)
@@ -110,7 +142,9 @@ class FootballEnvCore(object):
     env.game_config.display_scoreboard = self._config['display_settings']['scoreboard']
     env.game_config.display_player_names = self._config[
         'display_settings'].get('player_names', True)
-    env.game_config.camera = CAMERA_MAP[self._config['camera']]
+    env.game_config.camera = CAMERA_MAP[self._cameras[0]]
+    env.set_render_cameras(
+        [CAMERA_MAP[camera] for camera in self._cameras])
     return env
 
   def _reset(self, animations, inc):
@@ -139,6 +173,8 @@ class FootballEnvCore(object):
             scenario_config.controllable_left_players,
             scenario_config.controllable_right_players)
     self._env.reset(scenario_config, animations)
+    if self._env.game_config.render and len(self._cameras) > 1:
+      self._env.render(False)
 
   def reset(self, inc=1):
     """Reset environment for a new episode using a given config."""
@@ -229,12 +265,20 @@ class FootballEnvCore(object):
       if self._retrieve_observation():
         break
       if 'frame' in self._observation:
-        self._trace.add_frame(
-            self._observation['frame'],
-            self._observation.get('segmentation_frame'),
-            self._observation.get('ball_screen_position'),
-            self._observation.get('ball_screen_visible', False),
-            self._observation.get('engine_step', -1))
+        if 'camera_frames' in self._observation:
+          self._trace.add_frame(
+              self._observation['camera_frames'],
+              self._observation.get('camera_segmentation_frames'),
+              self._observation.get('camera_ball_screen_position'),
+              self._observation.get('camera_ball_screen_visible', {}),
+              self._observation.get('camera_engine_step', {}))
+        else:
+          self._trace.add_frame(
+              self._observation['frame'],
+              self._observation.get('segmentation_frame'),
+              self._observation.get('ball_screen_position'),
+              self._observation.get('ball_screen_visible', False),
+              self._observation.get('engine_step', -1))
     debug['frame_cnt'] = self._step
 
     # Finish the episode on score.
@@ -282,7 +326,7 @@ class FootballEnvCore(object):
     debug['time'] = timeit.default_timer()
     debug.update(extra_data)
     self._cumulative_reward += reward
-    single_observation = copy.deepcopy(self._observation)
+    single_observation = self._copy_observation(self._observation)
     trace = {
         'debug': debug,
         'observation': single_observation,
@@ -309,6 +353,29 @@ class FootballEnvCore(object):
       self.write_dump('episode_done')
     return self._observation, reward, episode_done, info
 
+  def _decode_render_frame(self, frame, allow_empty=False):
+    frame = np.frombuffer(frame, dtype=np.uint8)
+    expected_size = (self._config['render_resolution_x'] *
+                     self._config['render_resolution_y'] * 3)
+    if frame.size != expected_size:
+      if allow_empty:
+        return np.zeros((
+            self._config['render_resolution_y'],
+            self._config['render_resolution_x'], 3), dtype=np.uint8)
+      raise RuntimeError(
+          'Renderer returned {} bytes, expected {}'.format(
+              frame.size, expected_size))
+    frame = np.reshape(frame, [
+        self._config['render_resolution_x'],
+        self._config['render_resolution_y'], 3
+    ])
+    frame = np.reshape(
+        np.concatenate([frame[:, :, 0], frame[:, :, 1], frame[:, :, 2]]), [
+            3, self._config['render_resolution_y'],
+            self._config['render_resolution_x']
+        ])
+    return np.flip(np.transpose(frame, [1, 2, 0]), 0)
+
   def _retrieve_observation(self):
     """Constructs observations exposed by the environment.
 
@@ -318,52 +385,62 @@ class FootballEnvCore(object):
     info = self._env.get_info()
     result = {}
     if self._env.game_config.render:
-      frame = self._env.get_frame()
-      frame = np.frombuffer(frame, dtype=np.uint8)
-      frame = np.reshape(frame, [
-          self._config['render_resolution_x'],
-          self._config['render_resolution_y'], 3
-      ])
-      frame = np.reshape(
-          np.concatenate([frame[:, :, 0], frame[:, :, 1], frame[:, :, 2]]), [
-              3, self._config['render_resolution_y'],
-              self._config['render_resolution_x']
-          ])
-      frame = np.transpose(frame, [1, 2, 0])
-      frame = np.flip(frame, 0)
-      result['frame'] = frame
-      result['ball_screen_position'] = np.array(
-          [info.ball_screen_position[0], info.ball_screen_position[1]],
-          dtype=np.float32)
-      result['ball_screen_visible'] = bool(info.ball_screen_visible)
-      result['engine_step'] = info.step
-      if (self._config['write_segmentation_video'] or
-          self._config['write_instance_segmentation_video']):
-        segmentation_frame = self._env.get_segmentation_frame()
-        segmentation_frame = np.frombuffer(segmentation_frame, dtype=np.uint8)
-        expected_size = (self._config['render_resolution_x'] *
-                         self._config['render_resolution_y'] * 3)
-        if segmentation_frame.size == expected_size:
-          segmentation_frame = np.reshape(segmentation_frame, [
-              self._config['render_resolution_x'],
-              self._config['render_resolution_y'], 3
-          ])
-          segmentation_frame = np.reshape(
-              np.concatenate([
-                  segmentation_frame[:, :, 0],
-                  segmentation_frame[:, :, 1],
-                  segmentation_frame[:, :, 2]
-              ]), [
-                  3, self._config['render_resolution_y'],
-                  self._config['render_resolution_x']
-              ])
-          segmentation_frame = np.transpose(segmentation_frame, [1, 2, 0])
-          segmentation_frame = np.flip(segmentation_frame, 0)
-        else:
-          segmentation_frame = np.zeros((
-              self._config['render_resolution_y'],
-              self._config['render_resolution_x'], 3), dtype=np.uint8)
-        result['segmentation_frame'] = segmentation_frame
+      if len(self._cameras) == 1:
+        frame = self._decode_render_frame(self._env.get_frame())
+        result['frame'] = frame
+        result['ball_screen_position'] = np.array(
+            [info.ball_screen_position[0], info.ball_screen_position[1]],
+            dtype=np.float32)
+        result['ball_screen_visible'] = bool(info.ball_screen_visible)
+        result['engine_step'] = info.step
+        if (self._config['write_segmentation_video'] or
+            self._config['write_instance_segmentation_video']):
+          result['segmentation_frame'] = self._decode_render_frame(
+              self._env.get_segmentation_frame(), allow_empty=True)
+      else:
+        frames = {}
+        segmentation_frames = {}
+        ball_positions = {}
+        ball_visible = {}
+        engine_steps = {}
+        render_segmentation = (
+            self._config['write_segmentation_video'] or
+            self._config['write_instance_segmentation_video'])
+        for camera in self._cameras:
+          camera_name = camera.value
+          native_camera = CAMERA_MAP[camera]
+          frames[camera_name] = self._decode_render_frame(
+              self._env.get_frame_for_camera(native_camera))
+          if render_segmentation:
+            segmentation_frames[camera_name] = self._decode_render_frame(
+                self._env.get_segmentation_frame_for_camera(native_camera),
+                allow_empty=True)
+          position = self._env.get_ball_screen_position_for_camera(
+              native_camera)
+          ball_positions[camera_name] = np.array(
+              [position[0], position[1]], dtype=np.float32)
+          ball_visible[camera_name] = bool(
+              self._env.get_ball_screen_visible_for_camera(native_camera))
+          engine_steps[camera_name] = int(
+              self._env.get_capture_engine_step_for_camera(native_camera))
+        if len(set(engine_steps.values())) != 1:
+          raise RuntimeError(
+              'Multi-camera captures have different engine steps: {}'.format(
+                  engine_steps))
+
+        primary_camera = self._cameras[0].value
+        result['camera_frames'] = frames
+        result['camera_ball_screen_position'] = ball_positions
+        result['camera_ball_screen_visible'] = ball_visible
+        result['camera_engine_step'] = engine_steps
+        if render_segmentation:
+          result['camera_segmentation_frames'] = segmentation_frames
+        result['frame'] = frames[primary_camera]
+        result['ball_screen_position'] = ball_positions[primary_camera]
+        result['ball_screen_visible'] = ball_visible[primary_camera]
+        result['engine_step'] = engine_steps[primary_camera]
+        if render_segmentation:
+          result['segmentation_frame'] = segmentation_frames[primary_camera]
     result['ball'] = np.array(
         [info.ball_position[0], info.ball_position[1], info.ball_position[2]])
     # Ball's movement direction represented as [x, y] distance per step.
@@ -448,7 +525,7 @@ class FootballEnvCore(object):
     assert (self._env.state == GameState.game_running or
             self._env.state == GameState.game_done), (
                 'reset() must be called before observation()')
-    return copy.deepcopy(self._observation)
+    return self._copy_observation(self._observation)
 
   def sticky_actions_state(self, left_team, player_id):
     result = []
@@ -471,6 +548,8 @@ class FootballEnvCore(object):
             self._env.state == GameState.game_done), (
                 'reset() must be called before set_state()')
     res = self._env.set_state(state)
+    if self._env.game_config.render and len(self._cameras) > 1:
+      self._env.render(False)
     assert self._retrieve_observation()
     from_picle = six.moves.cPickle.loads(res)
     self._state = from_picle['FootballEnvCore']
@@ -499,6 +578,8 @@ class FootballEnvCore(object):
             _unused_rendering_engine = None
           else:
             self._env = self._get_new_env()
+          self._env.set_render_cameras(
+              [CAMERA_MAP[camera] for camera in self._cameras])
           self._rendering_in_use()
           self._reset(animations=False, inc=0)
           self.set_state(state)

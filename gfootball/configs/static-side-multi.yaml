@@ -1,0 +1,31 @@
+action_set: "full"
+players: ""
+level: "11_vs_11_stochastic"
+custom_display_stats: null
+display_game_stats: false
+episodes: 1
+dump_full_episodes: true
+dump_scores: false
+physics_steps_per_frame: 10
+render_resolution_x: 540
+render_resolution_y: 960
+real_time: false
+tracesdir: "/tmp/dumps"
+video_format: "m3u8"
+video_quality_level: 0
+write_video: true
+write_segmentation_video: true
+write_instance_segmentation_video: true
+write_ball_coordinates: true
+write_single_frame: false
+game_engine_random_seed: 42
+display_settings:
+  radar: false
+  scoreboard: false
+  player_names: false
+camera: "static-side-0"
+cameras:
+  - "static-side-0"
+  - "static-side-1"
+  - "static-side-2"
+  - "static-side-3"

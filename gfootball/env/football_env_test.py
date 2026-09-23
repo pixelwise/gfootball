@@ -268,7 +268,7 @@ class FootballEnvTest(parameterized.TestCase):
       o, _, _, _ = env.step(football_action_set.action_right)
       hash_value = observation_hash(o, hash_value)
     # Linux
-    expected_hash_value = 4000732293
+    expected_hash_value = 312996165
     if platform.system() == 'Windows':
       # On Windows we may have to check four possible values:
       #  for each of architectures (32 or 64 bits)
@@ -362,6 +362,132 @@ class FootballEnvTest(parameterized.TestCase):
           # next subtest to construct an engine for its calibrated camera.
           football_env_core._unused_rendering_engine = None
           football_env_core._unused_engines = []
+
+  def test_multi_static_side_matches_single_camera_renders(self):
+    """Checks multi-view captures equal isolated renders of the same state."""
+    if 'UNITTEST_IN_DOCKER' in os.environ:
+      return
+    cameras = [
+        'static-side-0', 'static-side-1',
+        'static-side-2', 'static-side-3',
+    ]
+    base_config = {
+        'level': 'tests.11_vs_11_hard_deterministic',
+        'render_resolution_x': 320,
+        'render_resolution_y': 180,
+        'write_segmentation_video': True,
+    }
+    football_env_core._unused_rendering_engine = None
+    football_env_core._unused_engines = []
+    multi_env = football_env.FootballEnv(config.Config(dict(
+        base_config, camera=cameras[0], cameras=cameras)))
+    try:
+      multi_env.render()
+      multi_env.reset()
+      multi_observation = multi_env._env.observation()
+    finally:
+      multi_env.close()
+      football_env_core._unused_rendering_engine = None
+      football_env_core._unused_engines = []
+
+    for camera in cameras:
+      with self.subTest(camera=camera):
+        single_env = football_env.FootballEnv(config.Config(dict(
+            base_config, camera=camera)))
+        try:
+          single_env.render()
+          single_env.reset()
+          single_observation = single_env._env.observation()
+          np.testing.assert_array_equal(
+              multi_observation['camera_frames'][camera],
+              single_observation['frame'])
+          np.testing.assert_array_equal(
+              multi_observation['camera_segmentation_frames'][camera],
+              single_observation['segmentation_frame'])
+          np.testing.assert_array_equal(
+              multi_observation['camera_ball_screen_position'][camera],
+              single_observation['ball_screen_position'])
+          self.assertEqual(
+              multi_observation['camera_ball_screen_visible'][camera],
+              single_observation['ball_screen_visible'])
+        finally:
+          single_env.close()
+          football_env_core._unused_rendering_engine = None
+          football_env_core._unused_engines = []
+
+  def test_multi_static_side_render_is_synchronized(self):
+    """Checks four calibrated views are captured from one engine step."""
+    if 'UNITTEST_IN_DOCKER' in os.environ:
+      return
+    # Rendering engines cache immutable resolution settings.
+    football_env_core._unused_rendering_engine = None
+    football_env_core._unused_engines = []
+    cameras = [
+        'static-side-0', 'static-side-1',
+        'static-side-2', 'static-side-3',
+    ]
+    width = 320
+    height = 180
+    cfg = config.Config({
+        'camera': 'wide',
+        'cameras': cameras,
+        'level': 'tests.11_vs_11_hard_deterministic',
+        'render_resolution_x': width,
+        'render_resolution_y': height,
+        'write_segmentation_video': True,
+    })
+    env = football_env.FootballEnv(cfg)
+    try:
+      env.render()
+      public_observations = env.reset()
+      observation = env._env.observation()
+      self.assertEqual(
+          cameras, list(public_observations[0]['camera_frames']))
+      self.assertEqual(
+          cameras, list(public_observations[0]['camera_engine_step']))
+      state_before_render = env.get_state({})
+      env._env._env.render(False)
+      state_after_render = env.get_state({})
+
+      self.assertEqual(state_before_render, state_after_render)
+      with self.assertRaises(ValueError):
+        env._env._env.get_frame_for_camera(
+            football_env_core.CAMERA_MAP[football_env_core.CameraType.WIDE])
+      self.assertEqual(cameras, list(observation['camera_frames']))
+      self.assertEqual(
+          cameras, list(observation['camera_segmentation_frames']))
+      self.assertEqual(
+          {observation['engine_step']},
+          set(observation['camera_engine_step'].values()))
+      self.assertIs(
+          observation['frame'],
+          observation['camera_frames'][cameras[0]])
+      self.assertIs(
+          observation['segmentation_frame'],
+          observation['camera_segmentation_frames'][cameras[0]])
+
+      for camera in cameras:
+        frame = observation['camera_frames'][camera]
+        segmentation = observation['camera_segmentation_frames'][camera]
+        self.assertEqual((height, width, 3), frame.shape)
+        self.assertEqual(frame.shape, segmentation.shape)
+        np.testing.assert_array_equal(
+            segmentation[:, :, 0], segmentation[:, :, 1])
+        np.testing.assert_array_equal(
+            segmentation[:, :, 1], segmentation[:, :, 2])
+        labels = np.unique(segmentation[:, :, 0])
+        self.assertEqual(0, labels[0])
+        self.assertTrue(np.all(labels <= 22))
+        if observation['camera_ball_screen_visible'][camera]:
+          ball_position = observation['camera_ball_screen_position'][camera]
+          self.assertGreaterEqual(ball_position[0], 0.0)
+          self.assertLess(ball_position[0], 1.0)
+          self.assertGreaterEqual(ball_position[1], 0.0)
+          self.assertLess(ball_position[1], 1.0)
+    finally:
+      env.close()
+      football_env_core._unused_rendering_engine = None
+      football_env_core._unused_engines = []
 
   def test_dynamic_render(self):
     """Verifies dynamic render support."""

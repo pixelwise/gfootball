@@ -15,8 +15,9 @@ are controlled by the following set of flags:
     episode animation.
 -  `video_format` - container and codec used for the rendered episode. Supported
    values are `avi` (Xvid, Motion JPEG, or lossless PNG depending on quality),
-   `webm` (VP8), and `mp4` (MPEG-4 Part 2). The selected format also applies to
-   semantic and instance segmentation videos.
+   `webm` (VP8), `mp4` (MPEG-4 Part 2), and `m3u8` (H.264 single-file HLS).
+   HLS creates `<dump-name>.m3u8` plus `<dump-name>_segments.ts`; semantic and
+   instance segmentation videos use MP4 when HLS is selected.
 -  `video_quality_level` - video quality from `0` (low) through `2` (high). Low
    quality limits output to 800x450. Medium and high retain the configured render
    resolution. AVI also selects a progressively higher-quality codec; WebM and

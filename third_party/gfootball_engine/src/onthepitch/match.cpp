@@ -506,6 +506,52 @@ Team *Match::GetBestPossessionTeam() {
   return bestPossessionTeam;
 }
 
+// Applies the calibrated Wolfsburg cam7 pose without advancing camera
+// smoothing history or consuming camera-shake randomness.
+bool Match::ApplyStaticSideCamera() {
+  if (GetGameConfig().camera != CameraType::STATIC_SIDE_0 &&
+      GetGameConfig().camera != CameraType::STATIC_SIDE_1 &&
+      GetGameConfig().camera != CameraType::STATIC_SIDE_2 &&
+      GetGameConfig().camera != CameraType::STATIC_SIDE_3) {
+    return false;
+  }
+
+  cameraOrientation = QUATERNION_IDENTITY;
+  cameraNodePosition =
+      Vector3(0.13412166f, -39.63250069f, 13.84474775f);
+  cameraNearCap = 5.0f;
+  cameraFarCap = 300.0f;
+
+  if (GetGameConfig().camera == CameraType::STATIC_SIDE_0) {
+    cameraNodeOrientation.Set(Matrix3(
+        0.43947573f, -0.01746386f,  0.89808468f,
+        0.72682648f,  0.59439877f, -0.34411243f,
+       -0.52781090f,  0.80398079f,  0.27391703f));
+    cameraFOV = 99.40683f;
+  } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_1) {
+    cameraNodeOrientation.Set(Matrix3(
+        0.93237555f, -0.02762154f,  0.36043430f,
+        0.30722095f,  0.58599676f, -0.74981536f,
+       -0.19050227f,  0.80984248f,  0.55485497f));
+    cameraFOV = 98.76896f;
+  } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_2) {
+    cameraNodeOrientation.Set(Matrix3(
+        0.92894101f, -0.02717736f, -0.36922891f,
+       -0.28441997f,  0.58606085f, -0.75870809f,
+        0.23701029f,  0.80981113f,  0.53668617f));
+    cameraFOV = 99.10011f;
+  } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_3) {
+    cameraNodeOrientation.Set(Matrix3(
+        0.43615526f, -0.02779244f, -0.89944215f,
+       -0.72026378f,  0.58838843f, -0.36744952f,
+        0.53943367f,  0.80810064f,  0.23661082f));
+    cameraFOV = 100.25191f;
+  } else {
+    return false;
+  }
+  return true;
+}
+
 void Match::UpdateIngameCamera() {
   DO_VALIDATION;
   // camera
@@ -645,79 +691,8 @@ void Match::UpdateIngameCamera() {
       cameraNearCap = 50 + zoom * 10.0f;
       cameraFarCap = 300;
 
-    } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_0) {
+    } else if (ApplyStaticSideCamera()) {
       DO_VALIDATION;
-
-      // All the static camera side camera parameteres are obtained from the
-      // sample recording from the Wolfsburg server:
-      // "/data/non-www/permanent-data/recordings/WolfsburgServer/4fe34067-e277-447a-af7e-9e565efad535"
-
-      // Calibrated Wolfsburg cam7_0. The matrix is the camera-to-world
-      // rotation obtained by decomposing the recording's perspective and
-      // per-camera projection matrices.
-      cameraOrientation = QUATERNION_IDENTITY;
-      cameraNodeOrientation.Set(Matrix3(
-          0.43947573f, -0.01746386f,  0.89808468f,
-          0.72682648f,  0.59439877f, -0.34411243f,
-         -0.52781090f,  0.80398079f,  0.27391703f));
-
-      cameraNodePosition =
-          Vector3(0.13412166f, -39.63250069f, 13.84474775f);
-
-      cameraFOV = 99.40683f;
-      cameraNearCap = 5.0f;
-      cameraFarCap = 300.0f;
-
-    } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_1) {
-      DO_VALIDATION;
-
-      // Calibrated Wolfsburg cam7_1.
-      cameraOrientation = QUATERNION_IDENTITY;
-      cameraNodeOrientation.Set(Matrix3(
-          0.93237555f, -0.02762154f,  0.36043430f,
-          0.30722095f,  0.58599676f, -0.74981536f,
-         -0.19050227f,  0.80984248f,  0.55485497f));
-
-      cameraNodePosition =
-          Vector3(0.13412166f, -39.63250069f, 13.84474775f);
-
-      cameraFOV = 98.76896f;
-      cameraNearCap = 5.0f;
-      cameraFarCap = 300.0f;
-
-    } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_2) {
-      DO_VALIDATION;
-
-      // Calibrated Wolfsburg cam7_2.
-      cameraOrientation = QUATERNION_IDENTITY;
-      cameraNodeOrientation.Set(Matrix3(
-          0.92894101f, -0.02717736f, -0.36922891f,
-         -0.28441997f,  0.58606085f, -0.75870809f,
-          0.23701029f,  0.80981113f,  0.53668617f));
-
-      cameraNodePosition =
-          Vector3(0.13412166f, -39.63250069f, 13.84474775f);
-
-      cameraFOV = 99.10011f;
-      cameraNearCap = 5.0f;
-      cameraFarCap = 300.0f;
-
-    } else if (GetGameConfig().camera == CameraType::STATIC_SIDE_3) {
-      DO_VALIDATION;
-
-      // Calibrated Wolfsburg cam7_3.
-      cameraOrientation = QUATERNION_IDENTITY;
-      cameraNodeOrientation.Set(Matrix3(
-          0.43615526f, -0.02779244f, -0.89944215f,
-         -0.72026378f,  0.58838843f, -0.36744952f,
-          0.53943367f,  0.80810064f,  0.23661082f));
-
-      cameraNodePosition =
-          Vector3(0.13412166f, -39.63250069f, 13.84474775f);
-
-      cameraFOV = 100.25191f;
-      cameraNearCap = 5.0f;
-      cameraFarCap = 300.0f;
 
     } else if (GetGameConfig().camera == CameraType::STATIC_GOAL_0) {
       DO_VALIDATION;
@@ -1161,6 +1136,12 @@ bool Match::Process() {
      }
   }
   return true;
+}
+
+void Match::UpdateCameraForRender() {
+  if (!ApplyStaticSideCamera()) {
+    UpdateCamera();
+  }
 }
 
 void Match::UpdateCamera() {

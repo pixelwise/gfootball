@@ -77,14 +77,17 @@ OpenGLRenderer3D::~OpenGLRenderer3D() {
     DO_VALIDATION;
 };
 
-void OpenGLRenderer3D::SwapBuffers() {
+void OpenGLRenderer3D::CaptureScreen() {
   DO_VALIDATION;
   last_screen_.resize(context_width * context_height * 3);
-  // Capture the frame that was just rendered. Reading after the swap returns
-  // the previous front buffer on SDL and puts RGB one frame behind auxiliary
-  // render passes such as semantic segmentation.
   mapping.glReadPixels(0, 0, context_width, context_height, GL_RGB,
                        GL_UNSIGNED_BYTE, &last_screen_[0]);
+}
+
+
+void OpenGLRenderer3D::SwapBuffers() {
+  DO_VALIDATION;
+  CaptureScreen();
   if (window) {
     SDL_GL_SwapWindow(window);
   }

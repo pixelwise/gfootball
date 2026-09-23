@@ -127,6 +127,14 @@ class FootballEnv(gym.Env):
         # There is no frame for players on the right ATM.
         if is_left and 'frame' in original:
           o['frame'] = original['frame']
+        if is_left:
+          for camera_field in [
+              'camera_frames', 'camera_segmentation_frames',
+              'camera_ball_screen_position', 'camera_ball_screen_visible',
+              'camera_engine_step'
+          ]:
+            if camera_field in original:
+              o[camera_field] = original[camera_field]
         observations.append(o)
     return observations
 

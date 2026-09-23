@@ -38,6 +38,24 @@ class GameEnv_Python : public GameEnv {
     return str;
   }
 
+  void set_render_cameras_python(const bp::list& cameras) {
+    CameraTypeVector native_cameras;
+    const int camera_count = bp::len(cameras);
+    for (int index = 0; index < camera_count; ++index) {
+      native_cameras.push_back(bp::extract<CameraType>(cameras[index]));
+    }
+    set_render_cameras(native_cameras);
+  }
+
+  PyObject* get_frame_for_camera_python(CameraType camera) {
+    screenshoot screen = get_frame_for_camera(camera);
+    return PyBytes_FromStringAndSize(screen.data(), screen.size());
+  }
+
+  PyObject* get_segmentation_frame_for_camera_python(CameraType camera) {
+    screenshoot screen = get_segmentation_frame_for_camera(camera);
+    return PyBytes_FromStringAndSize(screen.data(), screen.size());
+  }
   PyObject* get_segmentation_frame_python() {
     ContextHolder c(this);
     screenshoot screen = get_segmentation_frame();
@@ -148,6 +166,18 @@ BOOST_PYTHON_MODULE(_gameplayfootball) {
       .def("get_frame", &GameEnv_Python::get_frame_python)
       .def("get_segmentation_frame",
            &GameEnv_Python::get_segmentation_frame_python)
+      .def("set_render_cameras",
+           &GameEnv_Python::set_render_cameras_python)
+      .def("get_frame_for_camera",
+           &GameEnv_Python::get_frame_for_camera_python)
+      .def("get_segmentation_frame_for_camera",
+           &GameEnv_Python::get_segmentation_frame_for_camera_python)
+      .def("get_ball_screen_position_for_camera",
+           &GameEnv::get_ball_screen_position_for_camera)
+      .def("get_ball_screen_visible_for_camera",
+           &GameEnv::get_ball_screen_visible_for_camera)
+      .def("get_capture_engine_step_for_camera",
+           &GameEnv::get_capture_engine_step_for_camera)
       .def("perform_action", &GameEnv_Python::action)
       .def("sticky_action_state", &GameEnv_Python::sticky_action_state)
       .def("step", &GameEnv_Python::step_python)

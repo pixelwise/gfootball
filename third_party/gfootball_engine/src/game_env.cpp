@@ -16,6 +16,7 @@
 #include "game_env.hpp"
 
 #include <fenv.h>
+#include <stdexcept>
 
 #include <cerrno>
 #include <chrono>
@@ -135,6 +136,53 @@ screenshoot GameEnv::get_frame() {
 screenshoot GameEnv::get_segmentation_frame() {
   SetGame(this);
   return GetGraphicsSystem()->GetSegmentationScreen();
+}
+void GameEnv::set_render_cameras(const CameraTypeVector& cameras) {
+  if (cameras.empty()) {
+    throw std::invalid_argument("At least one render camera is required");
+  }
+  render_cameras_ = cameras;
+  game_config.camera = render_cameras_.front();
+}
+
+const CameraCapture& GameEnv::get_camera_capture(CameraType camera) const {
+  auto capture = camera_captures_.find(camera);
+  if (capture == camera_captures_.end()) {
+    throw std::invalid_argument("Camera was not captured in the current frame");
+  }
+  return capture->second;
+}
+
+screenshoot GameEnv::get_frame_for_camera(CameraType camera) {
+  SetGame(this);
+  return get_camera_capture(camera).frame;
+}
+
+screenshoot GameEnv::get_segmentation_frame_for_camera(CameraType camera) {
+  SetGame(this);
+  return get_camera_capture(camera).segmentation_frame;
+}
+
+std::vector<float> GameEnv::get_ball_screen_position_for_camera(
+    CameraType camera) {
+  SetGame(this);
+  return get_camera_capture(camera).ball_screen_position;
+}
+
+bool GameEnv::get_ball_screen_visible_for_camera(CameraType camera) {
+  SetGame(this);
+  return get_camera_capture(camera).ball_screen_visible;
+}
+
+int GameEnv::get_capture_engine_step_for_camera(CameraType camera) {
+  SetGame(this);
+  return get_camera_capture(camera).engine_step;
+}
+
+void GameEnv::update_capture_engine_steps() {
+  for (auto& capture : camera_captures_) {
+    capture.second.engine_step = context->step;
+  }
 }
 
 bool GameEnv::sticky_action_state(int action, bool left_team, int player) {
@@ -351,6 +399,7 @@ void GameEnv::step() {
     }
     GetTracker()->setDisabled(false);
   }
+  update_capture_engine_steps();
 }
 
 void GameEnv::ProcessState(EnvState* state) {
@@ -362,8 +411,48 @@ void GameEnv::ProcessState(EnvState* state) {
 
 void GameEnv::render(bool swap_buffer) {
   GetTracker()->setDisabled(true);
-  context->gameTask->PrepareRender();
-  context->graphicsSystem.GetTask()->Render(swap_buffer);
+  CameraTypeVector cameras = render_cameras_;
+  if (cameras.empty()) {
+    cameras.push_back(game_config.camera);
+  }
+  const CameraType primary_camera = cameras.front();
+  if (cameras.size() == 1) {
+    // Preserve the original scalar render path byte-for-byte.
+    context->gameTask->PrepareRender();
+    context->graphicsSystem.GetTask()->Render(swap_buffer);
+    GetTracker()->setDisabled(false);
+    return;
+  }
+
+  // Render secondary cameras first so the primary camera remains in the
+  // onscreen backbuffer and in the legacy scalar capture APIs.
+  CameraTypeVector render_order(cameras.begin() + 1, cameras.end());
+  render_order.push_back(primary_camera);
+  camera_captures_.clear();
+  for (CameraType camera : render_order) {
+    game_config.camera = camera;
+    context->gameTask->GetMatch()->UpdateCameraForRender();
+    context->gameTask->PrepareRender();
+    const bool swap_this_view = swap_buffer && camera == primary_camera;
+    context->graphicsSystem.GetTask()->Render(swap_this_view);
+    if (!swap_this_view) {
+      context->graphicsSystem.CaptureScreen();
+    }
+
+    CameraCapture capture;
+    capture.frame = context->graphicsSystem.GetScreen();
+    if (game_config.render_segmentation) {
+      capture.segmentation_frame =
+          context->graphicsSystem.GetSegmentationScreen();
+    }
+    SharedInfo view_info;
+    context->gameTask->GetMatch()->GetState(&view_info);
+    capture.ball_screen_position = view_info.ball_screen_position;
+    capture.ball_screen_visible = view_info.ball_screen_visible;
+    capture.engine_step = context->step;
+    camera_captures_[camera] = capture;
+  }
+  game_config.camera = primary_camera;
   GetTracker()->setDisabled(false);
 }
 

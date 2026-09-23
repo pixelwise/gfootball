@@ -74,9 +74,34 @@ class PlayGameTest(unittest.TestCase):
 
     self.assertEqual('mp4', game_config.video_format)
 
+  def test_m3u8_is_a_valid_video_format(self):
+    game_config = play_game.GameConfig(video_format='m3u8')
+
+    self.assertEqual('m3u8', game_config.video_format)
+
   def test_unknown_video_format_is_rejected(self):
     with self.assertRaises(ValidationError):
       play_game.GameConfig(video_format='mov')
+
+  def test_cameras_override_scalar_camera_and_preserve_order(self):
+    game_config = play_game.GameConfig(
+        camera='wide',
+        cameras=['static-side-2', 'static-side-0'])
+
+    self.assertEqual(play_game.CameraType.STATIC_SIDE_2, game_config.camera)
+    self.assertEqual(
+        [play_game.CameraType.STATIC_SIDE_2,
+         play_game.CameraType.STATIC_SIDE_0],
+        game_config.cameras)
+
+  def test_cameras_must_not_be_empty(self):
+    with self.assertRaises(ValidationError):
+      play_game.GameConfig(cameras=[])
+
+  def test_cameras_must_not_contain_duplicates(self):
+    with self.assertRaises(ValidationError):
+      play_game.GameConfig(
+          cameras=['static-side-0', 'static-side-0'])
 
   def test_write_single_frame_is_loaded_from_yaml(self):
     with tempfile.NamedTemporaryFile(mode='w') as config_file:

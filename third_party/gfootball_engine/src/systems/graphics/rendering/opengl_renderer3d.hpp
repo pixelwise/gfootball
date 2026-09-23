@@ -33,6 +33,7 @@ namespace blunted {
       virtual void DisableContext();
       virtual const screenshoot& GetScreen();
       virtual const screenshoot& GetSegmentationScreen();
+      virtual void CaptureScreen();
       virtual void CaptureSegmentationScreen();
       virtual ~OpenGLRenderer3D();
 

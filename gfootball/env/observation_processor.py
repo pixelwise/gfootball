@@ -23,6 +23,7 @@ import collections
 import datetime
 import os
 import shutil
+import subprocess
 import tempfile
 import timeit
 import traceback
@@ -70,6 +71,137 @@ def _video_fourcc(video_format, video_quality_level, lossless=False):
   if video_format == 'webm':
     return cv2.VideoWriter_fourcc(*'vp80')
   return cv2.VideoWriter_fourcc(*'mp4v')
+
+
+class _HlsVideoWriter(object):
+  """Streams RGB frames to a single-file, byte-range HLS package."""
+
+  def __init__(self, playlist_path, frame_dim, fps, quality_level):
+    width, height = frame_dim
+    if width % 2 or height % 2:
+      raise ValueError(
+          'M3U8 video requires even render dimensions for yuv420p; got '
+          '%dx%d.' % (width, height))
+
+    ffmpeg = shutil.which('ffmpeg')
+    if not ffmpeg:
+      raise RuntimeError(
+          'Unable to create M3U8 video because ffmpeg was not found. '
+          'Install ffmpeg or use avi, webm, or mp4.')
+
+    self._playlist_path = playlist_path
+    root, extension = os.path.splitext(playlist_path)
+    assert extension == '.m3u8'
+    self._segment_path = root + '_segments.ts'
+    self._frame_dim = frame_dim
+    output_directory = os.path.dirname(os.path.abspath(playlist_path))
+    self._staging_directory = tempfile.mkdtemp(
+        prefix='.gfootball-hls-', dir=output_directory)
+    self._staged_playlist = os.path.join(
+        self._staging_directory, os.path.basename(self._playlist_path))
+    self._staged_segment = os.path.join(
+        self._staging_directory, os.path.basename(self._segment_path))
+    self._stderr = tempfile.TemporaryFile(mode='w+b')
+    self._frame_count = 0
+    self._released = False
+
+    crf = {1: 23, 2: 18}.get(quality_level, 28)
+    gop_size = max(1, int(round(fps * 2.0)))
+    command = [
+        ffmpeg,
+        '-hide_banner',
+        '-loglevel', 'error',
+        '-y',
+        '-f', 'rawvideo',
+        '-pixel_format', 'bgr24',
+        '-video_size', '%dx%d' % (width, height),
+        '-framerate', str(fps),
+        '-i', 'pipe:0',
+        '-an',
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-crf', str(crf),
+        '-pix_fmt', 'yuv420p',
+        '-flags', '+cgop',
+        '-g', str(gop_size),
+        '-keyint_min', str(gop_size),
+        '-sc_threshold', '0',
+        '-f', 'hls',
+        '-hls_time', '2',
+        '-hls_playlist_type', 'vod',
+        '-hls_segment_type', 'mpegts',
+        '-hls_flags', 'single_file',
+        '-hls_segment_filename', self._staged_segment,
+        self._staged_playlist,
+    ]
+    try:
+      self._process = subprocess.Popen(
+          command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+          stderr=self._stderr)
+    except Exception:
+      self._cleanup_staging()
+      self._stderr.close()
+      raise
+
+  def write(self, frame):
+    if self._released:
+      raise RuntimeError('Cannot write to a finalized M3U8 video.')
+    expected_shape = (self._frame_dim[1], self._frame_dim[0], 3)
+    if frame.shape != expected_shape or frame.dtype != np.uint8:
+      raise ValueError(
+          'M3U8 frame must be uint8 with shape %s; got %s %s.' %
+          (expected_shape, frame.shape, frame.dtype))
+    try:
+      self._process.stdin.write(np.ascontiguousarray(frame).tobytes())
+    except BrokenPipeError:
+      raise RuntimeError(self._ffmpeg_error('FFmpeg stopped accepting frames'))
+    self._frame_count += 1
+
+  def _ffmpeg_error(self, prefix):
+    self._stderr.flush()
+    self._stderr.seek(0)
+    details = self._stderr.read().decode('utf-8', errors='replace').strip()
+    return '%s%s' % (prefix, ': ' + details if details else '')
+
+  def _cleanup_staging(self):
+    shutil.rmtree(self._staging_directory, ignore_errors=True)
+
+  def release(self, write_files=True):
+    """Finalizes and optionally publishes the HLS package."""
+    if self._released:
+      return False
+    self._released = True
+    try:
+      self._process.stdin.close()
+    except BrokenPipeError:
+      pass
+    return_code = self._process.wait()
+
+    if self._frame_count == 0:
+      self._cleanup_staging()
+      self._stderr.close()
+      return False
+    if return_code != 0:
+      error = self._ffmpeg_error(
+          'FFmpeg failed to finalize M3U8 video with exit code %d' %
+          return_code)
+      self._cleanup_staging()
+      self._stderr.close()
+      raise RuntimeError(error)
+
+    try:
+      if write_files:
+        os.replace(self._staged_segment, self._segment_path)
+        try:
+          os.replace(self._staged_playlist, self._playlist_path)
+        except Exception:
+          if os.path.exists(self._segment_path):
+            os.remove(self._segment_path)
+          raise
+    finally:
+      self._cleanup_staging()
+      self._stderr.close()
+    return True
 
 
 class DumpConfig(object):
@@ -233,6 +365,7 @@ class ActiveDump(object):
     self._name = name
     self._finish_step = finish_step
     self._config = config
+    self._initializing = True
     self._video_fd = None
     self._video_tmp = None
     self._video_writer = None
@@ -251,56 +384,68 @@ class ActiveDump(object):
     self._frame_dim = None
     self._step_cnt = 0
     self._dump_file = None
+    self._video_format = None
+    self._video_suffix = None
+    self._segmentation_video_suffix = None
+    self._instance_video_suffix = None
     if (config['write_video'] or config['write_segmentation_video'] or
         config['write_instance_segmentation_video']):
       video_format = config['video_format']
-      assert video_format in ['avi', 'webm', 'mp4']
+      if video_format not in ['avi', 'webm', 'mp4', 'm3u8']:
+        raise ValueError(
+            'Unsupported video format: %s' % video_format)
+      self._video_format = video_format
       self._video_suffix = '.%s' % video_format
+      mask_video_format = 'mp4' if video_format == 'm3u8' else video_format
+      self._segmentation_video_suffix = '.%s' % mask_video_format
+      self._instance_video_suffix = '.%s' % mask_video_format
       self._frame_dim = (
           config['render_resolution_x'], config['render_resolution_y'])
       if config['video_quality_level'] not in [1, 2]:
         # Reduce resolution to (800, 450).
         self._frame_dim = min(self._frame_dim, (800, 450))
+      fps = (const.PHYSICS_STEPS_PER_SECOND /
+             config['physics_steps_per_frame'])
     if config['write_video']:
-      self._video_fd, self._video_tmp = tempfile.mkstemp(
-          suffix=self._video_suffix)
-      fcc = _video_fourcc(video_format, config['video_quality_level'])
-
-      self._video_writer = cv2.VideoWriter(
-          self._video_tmp, fcc,
-          const.PHYSICS_STEPS_PER_SECOND / config['physics_steps_per_frame'],
-          self._frame_dim)
-      self._ensure_video_writer_open(
-          '_video_writer', '_video_fd', '_video_tmp', video_format)
+      if video_format == 'm3u8':
+        self._video_writer = _HlsVideoWriter(
+            self._name + self._video_suffix, self._frame_dim, fps,
+            config['video_quality_level'])
+      else:
+        self._video_fd, self._video_tmp = tempfile.mkstemp(
+            suffix=self._video_suffix)
+        fcc = _video_fourcc(video_format, config['video_quality_level'])
+        self._video_writer = cv2.VideoWriter(
+            self._video_tmp, fcc, fps, self._frame_dim)
+        self._ensure_video_writer_open(
+            '_video_writer', '_video_fd', '_video_tmp', video_format)
     if config['write_segmentation_video']:
       self._segmentation_video_fd, self._segmentation_video_tmp = \
-          tempfile.mkstemp(suffix=self._video_suffix)
+          tempfile.mkstemp(suffix=self._segmentation_video_suffix)
       mask_fcc = _video_fourcc(
-          video_format, config['video_quality_level'], lossless=True)
+          mask_video_format, config['video_quality_level'], lossless=True)
       self._segmentation_video_writer = cv2.VideoWriter(
-          self._segmentation_video_tmp, mask_fcc,
-          const.PHYSICS_STEPS_PER_SECOND / config['physics_steps_per_frame'],
-          self._frame_dim)
+          self._segmentation_video_tmp, mask_fcc, fps, self._frame_dim)
       self._ensure_video_writer_open(
           '_segmentation_video_writer', '_segmentation_video_fd',
-          '_segmentation_video_tmp', video_format)
+          '_segmentation_video_tmp', mask_video_format)
     if config['write_instance_segmentation_video']:
       self._instance_video_fd, self._instance_video_tmp = \
-          tempfile.mkstemp(suffix=self._video_suffix)
+          tempfile.mkstemp(suffix=self._instance_video_suffix)
       instance_fcc = _video_fourcc(
-          video_format, config['video_quality_level'], lossless=True)
+          mask_video_format, config['video_quality_level'], lossless=True)
       self._instance_video_writer = cv2.VideoWriter(
-          self._instance_video_tmp, instance_fcc,
-          const.PHYSICS_STEPS_PER_SECOND / config['physics_steps_per_frame'],
-          self._frame_dim)
+          self._instance_video_tmp, instance_fcc, fps, self._frame_dim)
       self._ensure_video_writer_open(
           '_instance_video_writer', '_instance_video_fd',
-          '_instance_video_tmp', video_format)
+          '_instance_video_tmp', mask_video_format)
     if WRITE_FILES:
       self._dump_file = open(name + '.dump', 'wb')
+    self._initializing = False
 
   def __del__(self):
-    self.finalize()
+    if not self._initializing:
+      self.finalize()
 
   def _ensure_video_writer_open(
       self, writer_attribute, fd_attribute, tmp_attribute, video_format):
@@ -462,7 +607,8 @@ class ActiveDump(object):
     if self._step_cnt == 0:
       o['debug']['config'] = self._config.get_dictionary()
 
-    six.moves.cPickle.dump(o._trace, self._dump_file)
+    if self._dump_file:
+      six.moves.cPickle.dump(o._trace, self._dump_file)
     if temp_frame is not None:
       o._trace['observation']['frame'] = temp_frame
     if temp_segmentation_frame is not None:
@@ -472,23 +618,35 @@ class ActiveDump(object):
   def finalize(self):
     dump_info = {}
     if self._video_writer:
-      self._video_writer.release()
-      self._video_writer = None
-      os.close(self._video_fd)
-      try:
-        # For some reason sometimes the file is missing, so the code fails.
-        if WRITE_FILES:
-          shutil.move(self._video_tmp, self._name + self._video_suffix)
-        dump_info['video'] = '%s%s' % (self._name, self._video_suffix)
-        logging.info('Video written to %s%s', self._name, self._video_suffix)
-      except:
-        logging.error(traceback.format_exc())
+      if self._video_format == 'm3u8':
+        video_writer = self._video_writer
+        self._video_writer = None
+        if video_writer.release(write_files=WRITE_FILES):
+          video = self._name + self._video_suffix
+          dump_info['video'] = video
+          logging.info('Video written to %s', video)
+        else:
+          logging.warning('No frames written to M3U8 video.')
+      else:
+        self._video_writer.release()
+        self._video_writer = None
+        os.close(self._video_fd)
+        try:
+          # For some reason sometimes the file is missing, so the code fails.
+          if WRITE_FILES:
+            shutil.move(self._video_tmp, self._name + self._video_suffix)
+          dump_info['video'] = '%s%s' % (self._name, self._video_suffix)
+          logging.info('Video written to %s%s', self._name,
+                       self._video_suffix)
+        except:
+          logging.error(traceback.format_exc())
     if self._segmentation_video_writer:
       self._segmentation_video_writer.release()
       self._segmentation_video_writer = None
       os.close(self._segmentation_video_fd)
       try:
-        segmentation_video = self._name + '_segmentation' + self._video_suffix
+        segmentation_video = (
+            self._name + '_segmentation' + self._segmentation_video_suffix)
         if WRITE_FILES:
           shutil.move(self._segmentation_video_tmp, segmentation_video)
         dump_info['segmentation_video'] = segmentation_video
@@ -500,7 +658,8 @@ class ActiveDump(object):
       self._instance_video_writer = None
       os.close(self._instance_video_fd)
       try:
-        instance_video = self._name + '_instances' + self._video_suffix
+        instance_video = (
+            self._name + '_instances' + self._instance_video_suffix)
         if WRITE_FILES:
           shutil.move(self._instance_video_tmp, instance_video)
         dump_info['instance_segmentation_video'] = instance_video
@@ -561,6 +720,151 @@ class ActiveDump(object):
         dump_info['dump'] = '%s.dump' % self._name
         logging.info('Dump written to %s.dump', self._name)
     return dump_info
+
+
+class MultiCameraActiveDump(object):
+  """Coordinates one pixel writer per camera and one shared state dump."""
+
+  _CAMERA_FIELDS = {
+      'camera_frames': 'frame',
+      'camera_segmentation_frames': 'segmentation_frame',
+      'camera_ball_screen_position': 'ball_screen_position',
+      'camera_ball_screen_visible': 'ball_screen_visible',
+      'camera_engine_step': 'engine_step',
+  }
+
+  def __init__(self, name, finish_step, config):
+    self._name = name
+    self._finish_step = finish_step
+    self._config = config
+    self._initializing = True
+    self._step_cnt = 0
+    self._finalized = False
+    self._camera_dumps = collections.OrderedDict()
+    self._dump_file = None
+    cameras = config['cameras']
+    for camera in cameras:
+      camera_name = camera.value if hasattr(camera, 'value') else str(camera)
+      camera_config = config.__class__(config.get_dictionary())
+      camera_config['camera'] = camera_name
+      camera_config['cameras'] = None
+      camera_dump = ActiveDump(name + '_' + camera_name, finish_step,
+                               camera_config)
+      if camera_dump._dump_file:
+        camera_dump._dump_file.close()
+        camera_dump._dump_file = None
+        os.remove(camera_dump._name + '.dump')
+      self._camera_dumps[camera_name] = camera_dump
+    self._dump_file = open(name + '.dump', 'wb') if WRITE_FILES else None
+    self._initializing = False
+
+  def __del__(self):
+    if not self._initializing:
+      self.finalize()
+
+  def _state_for_camera(self, state, camera):
+    trace = state._trace.copy()
+    observation = state._trace['observation'].copy()
+    for map_name, scalar_name in self._CAMERA_FIELDS.items():
+      values = observation.pop(map_name, None)
+      if values is not None:
+        observation[scalar_name] = values[camera]
+    trace['observation'] = observation
+    trace['debug'] = state._trace['debug'].copy()
+    camera_state = ObservationState(trace)
+    camera_state._debugs = list(state._debugs)
+    return camera_state
+
+  def _write_dump_step(self, state):
+    if not self._dump_file:
+      return
+    trace = state._trace.copy()
+    trace['observation'] = state._trace['observation'].copy()
+    for field in [
+        'frame', 'segmentation_frame', 'camera_frames',
+        'camera_segmentation_frames', 'camera_ball_screen_position',
+        'camera_ball_screen_visible', 'camera_engine_step'
+    ]:
+      trace['observation'].pop(field, None)
+    trace['debug'] = state._trace['debug'].copy()
+    if self._step_cnt == 0:
+      trace['debug']['config'] = self._config.get_dictionary()
+    six.moves.cPickle.dump(trace, self._dump_file)
+
+  def add_step(self, state):
+    for camera, camera_dump in self._camera_dumps.items():
+      camera_dump.add_step(self._state_for_camera(state, camera))
+    self._write_dump_step(state)
+    self._step_cnt += 1
+
+  def add_frame(self, frame, segmentation_frame=None,
+                ball_screen_position=None, ball_screen_visible=False,
+                engine_step=-1):
+    if not isinstance(frame, dict):
+      raise ValueError('Multi-camera frame bundle must be a dictionary')
+    segmentation_frames = segmentation_frame or {}
+    ball_positions = ball_screen_position or {}
+    ball_visibility = ball_screen_visible or {}
+    engine_steps = engine_step or {}
+    for camera, camera_dump in self._camera_dumps.items():
+      camera_dump.add_frame(
+          frame[camera], segmentation_frames.get(camera),
+          ball_positions.get(camera), ball_visibility.get(camera, False),
+          engine_steps.get(camera, -1))
+
+  def finalize(self):
+    if self._finalized:
+      return {}
+    self._finalized = True
+    dump_info = {}
+    primary_camera = next(iter(self._camera_dumps))
+    camera_info = collections.OrderedDict()
+    errors = []
+    for camera, camera_dump in self._camera_dumps.items():
+      try:
+        camera_info[camera] = camera_dump.finalize()
+      except Exception as error:
+        logging.error(
+            'Failed to finalize camera %s: %s', camera, error)
+        camera_info[camera] = {}
+        errors.append((camera, error))
+    plural_keys = {
+        'video': 'videos',
+        'segmentation_video': 'segmentation_videos',
+        'instance_segmentation_video': 'instance_segmentation_videos',
+        'instance_segmentation_metadata':
+            'instance_segmentation_metadata_by_camera',
+        'ball_coordinates': 'ball_coordinates_by_camera',
+    }
+    for singular, plural in plural_keys.items():
+      values = collections.OrderedDict(
+          (camera, info[singular])
+          for camera, info in camera_info.items() if singular in info)
+      if values:
+        dump_info[plural] = values
+        if primary_camera in values:
+          dump_info[singular] = values[primary_camera]
+    self._camera_dumps = collections.OrderedDict()
+    if self._dump_file:
+      self._dump_file.close()
+      self._dump_file = None
+      if self._step_cnt == 0:
+        logging.warning('No data to write to the dump.')
+      else:
+        dump_info['dump'] = '%s.dump' % self._name
+        logging.info('Dump written to %s.dump', self._name)
+    if errors:
+      raise RuntimeError(
+          'Failed to finalize camera writers: %s' %
+          ', '.join(camera for camera, _ in errors))
+    return dump_info
+
+
+def _create_active_dump(name, finish_step, config):
+  cameras = config['cameras'] if 'cameras' in config else None
+  if cameras and len(cameras) > 1:
+    return MultiCameraActiveDump(name, finish_step, config)
+  return ActiveDump(name, finish_step, config)
 
 
 class ObservationState(object):
@@ -637,6 +941,7 @@ class ObservationProcessor(object):
     self._frame = 0
     self._state = None
     self._trace = collections.deque([], PAST_STEPS_TRACE_SIZE)
+    self._transient_camera_state = None
 
   def reset(self):
     self.clear_state()
@@ -654,16 +959,44 @@ class ObservationProcessor(object):
         self._config['write_video'] or
         self._config['write_segmentation_video'] or
         self._config['write_instance_segmentation_video']):
-      self._trace[-1].add_frame(
-          frame, segmentation_frame, ball_screen_position,
-          ball_screen_visible, engine_step)
-      for dump in self.pending_dumps():
+      dumps = self.pending_dumps()
+      # Multi-camera frames are too large to retain in the rolling trace.
+      # Once an incremental dump exists, stream them directly to its writers.
+      if not isinstance(frame, dict) or not dumps:
+        self._trace[-1].add_frame(
+            frame, segmentation_frame, ball_screen_position,
+            ball_screen_visible, engine_step)
+      for dump in dumps:
         dump.add_frame(
             frame, segmentation_frame, ball_screen_position,
             ball_screen_visible, engine_step)
 
   def update(self, trace):
     self._frame += 1
+    self._transient_camera_state = None
+    if 'camera_frames' in trace['observation']:
+      # Feed this full state to writers, but retain only non-pixel gameplay
+      # data in the rolling history and serialized dump.
+      transient_state = ObservationState(trace)
+      durable_trace = trace.copy()
+      durable_trace['observation'] = trace['observation'].copy()
+      for field in [
+          'frame', 'segmentation_frame', 'camera_frames',
+          'camera_segmentation_frames', 'camera_ball_screen_position',
+          'camera_ball_screen_visible', 'camera_engine_step'
+      ]:
+        durable_trace['observation'].pop(field, None)
+      self._state = ObservationState(durable_trace)
+      self._trace.append(self._state)
+      dumps = self.pending_dumps()
+      for dump in dumps:
+        dump.add_step(transient_state)
+      if not dumps:
+        # The full-episode dump is requested immediately after the first
+        # update. Keep this one bundle just long enough for write_dump().
+        self._transient_camera_state = (self._state, transient_state)
+      return
+
     remove_frame = (not self._config['write_video'] and
                     'frame' in trace['observation'])
     remove_segmentation = (
@@ -713,15 +1046,20 @@ class ObservationProcessor(object):
     dump_name = '{2}{3}{0}_{1}'.format(name,
         datetime.datetime.now().strftime('%Y%m%d-%H%M%S%f'),
         self._dump_directory, os.sep)
-    config._active_dump = ActiveDump(dump_name,
+    config._active_dump = _create_active_dump(dump_name,
         self._frame + config._steps_after, self._config)
     for step in list(self._trace)[-config._steps_before:]:
-      config._active_dump.add_step(step)
+      dump_step = step
+      if (self._transient_camera_state and
+          self._transient_camera_state[0] is step):
+        dump_step = self._transient_camera_state[1]
+      config._active_dump.add_step(dump_step)
       for (frame, segmentation_frame, ball_screen_position,
            ball_screen_visible, engine_step) in step._additional_frames:
         config._active_dump.add_frame(
             frame, segmentation_frame, ball_screen_position,
             ball_screen_visible, engine_step)
+    self._transient_camera_state = None
     if config._steps_after == 0:
       # Synchronously finalize dump, so that crash dump is recorded.
       config._active_dump.finalize()

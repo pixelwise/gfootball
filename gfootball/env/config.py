@@ -92,6 +92,7 @@ class Config(object):
         'players': ['agent:left_players=1'],
         'level': '11_vs_11_stochastic',
         'camera': 'wide',
+        'cameras': None,
         'physics_steps_per_frame': 10,
         'render_resolution_x': 1280,
         'real_time': False,

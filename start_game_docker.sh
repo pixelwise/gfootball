@@ -4,6 +4,7 @@ set -euo pipefail
 PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DUMPS_DIR="${GFOOTBALL_DUMPS_DIR:-${PROJECT_DIR}/dumps}"
 IMAGE_TAG="${GFOOTBALL_DOCKER_IMAGE:-gfootball}"
+CONFIG_FILE="${1:-gfootball/configs/default.yaml}"
 
 if [[ -n "${GFOOTBALL_CONTAINER_RUNTIME:-}" ]]; then
   CONTAINER_RUNTIME="${GFOOTBALL_CONTAINER_RUNTIME}"
@@ -46,5 +47,5 @@ exec "${CONTAINER_RUNTIME}" run --rm \
   -v "${VOLUME_SPEC}" \
   "${IMAGE_TAG}" \
   env -u DISPLAY uv run --locked python -m gfootball.play_game \
-  --config_file gfootball/configs/default.yaml \
+  --config_file "${CONFIG_FILE}" \
   --render=true

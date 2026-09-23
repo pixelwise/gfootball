@@ -5,6 +5,7 @@ from absl.testing import absltest
 import cv2
 import numpy as np
 import os
+import pickle
 import tempfile
 
 from gfootball.env import config
@@ -78,6 +79,118 @@ class ObservationProcessorTest(absltest.TestCase):
         np.testing.assert_array_equal(ball_data['frame_size'], [8, 6])
         self.assertEqual(video_frames, len(ball_data['xy']))
 
+  def test_multi_camera_dump_writes_qualified_artifacts(self):
+    with tempfile.TemporaryDirectory() as directory:
+      cameras = ['static-side-0', 'static-side-1']
+      dump_config = config.Config({
+          'cameras': cameras,
+          'display_game_stats': False,
+          'render_resolution_x': 8,
+          'render_resolution_y': 6,
+          'video_quality_level': 2,
+          'write_video': True,
+          'write_ball_coordinates': True,
+      })
+      name = os.path.join(directory, 'episode_done_test')
+      active_dump = observation_processor.MultiCameraActiveDump(
+          name, 2, dump_config)
+      frames = {
+          camera: np.full((6, 8, 3), index * 50, dtype=np.uint8)
+          for index, camera in enumerate(cameras)
+      }
+      state = observation_processor.ObservationState({
+          'debug': {},
+          'observation': {
+              'camera_frames': frames,
+              'camera_ball_screen_position': {
+                  camera: np.array([0.25 + 0.5 * index, 0.5])
+                  for index, camera in enumerate(cameras)
+              },
+              'camera_ball_screen_visible': {
+                  camera: True for camera in cameras
+              },
+              'camera_engine_step': {
+                  camera: 17 for camera in cameras
+              },
+          },
+      })
+
+      active_dump.add_step(state)
+      dump_info = active_dump.finalize()
+
+      expected_videos = {
+          camera: name + '_' + camera + '.avi' for camera in cameras
+      }
+      self.assertEqual(expected_videos, dump_info['videos'])
+      self.assertEqual(expected_videos[cameras[0]], dump_info['video'])
+      for video_name in expected_videos.values():
+        video = cv2.VideoCapture(video_name)
+        self.assertTrue(video.isOpened())
+        self.assertEqual(1, int(video.get(cv2.CAP_PROP_FRAME_COUNT)))
+        video.release()
+
+      expected_ball_files = {
+          camera: name + '_' + camera + '_ball.npz' for camera in cameras
+      }
+      self.assertEqual(
+          expected_ball_files, dump_info['ball_coordinates_by_camera'])
+      self.assertEqual(
+          expected_ball_files[cameras[0]], dump_info['ball_coordinates'])
+      with open(dump_info['dump'], 'rb') as dump_file:
+        stored_trace = pickle.load(dump_file)
+      forbidden = {
+          'frame', 'segmentation_frame', 'camera_frames',
+          'camera_segmentation_frames', 'camera_ball_screen_position',
+          'camera_ball_screen_visible', 'camera_engine_step',
+      }
+      self.assertFalse(
+          forbidden.intersection(stored_trace['observation']))
+
+  def test_multi_camera_pixels_are_transient_and_not_pickled(self):
+    dump_config = config.Config({
+        'cameras': ['static-side-0', 'static-side-1'],
+    })
+    processor = observation_processor.ObservationProcessor(dump_config)
+    frame = np.zeros((6, 8, 3), dtype=np.uint8)
+    trace = {
+        'debug': {},
+        'observation': {
+            'frame': frame,
+            'segmentation_frame': frame,
+            'camera_frames': {
+                'static-side-0': frame,
+                'static-side-1': frame,
+            },
+            'camera_segmentation_frames': {
+                'static-side-0': frame,
+                'static-side-1': frame,
+            },
+            'camera_ball_screen_position': {
+                'static-side-0': np.zeros(2),
+                'static-side-1': np.zeros(2),
+            },
+            'camera_ball_screen_visible': {
+                'static-side-0': False,
+                'static-side-1': False,
+            },
+            'camera_engine_step': {
+                'static-side-0': 3,
+                'static-side-1': 3,
+            },
+        },
+    }
+
+    processor.update(trace)
+
+    durable_observation = processor[-1]._trace['observation']
+    forbidden = {
+        'frame', 'segmentation_frame', 'camera_frames',
+        'camera_segmentation_frames', 'camera_ball_screen_position',
+        'camera_ball_screen_visible', 'camera_engine_step',
+    }
+    self.assertFalse(forbidden.intersection(durable_observation))
+    self.assertIsNotNone(processor._transient_camera_state)
+
   def test_active_dump_writes_mp4_video(self):
     with tempfile.TemporaryDirectory() as directory:
       dump_config = config.Config({
@@ -103,6 +216,80 @@ class ObservationProcessorTest(absltest.TestCase):
       video.release()
       self.assertTrue(ok)
       self.assertEqual((24, 32, 3), decoded_frame.shape)
+
+  def test_multi_camera_m3u8_writes_one_pair_per_camera(self):
+    if not observation_processor.shutil.which('ffmpeg'):
+      self.skipTest('ffmpeg is required for HLS integration tests')
+    with tempfile.TemporaryDirectory() as directory:
+      cameras = ['static-side-0', 'static-side-1']
+      dump_config = config.Config({
+          'cameras': cameras,
+          'display_game_stats': False,
+          'render_resolution_x': 32,
+          'render_resolution_y': 24,
+          'physics_steps_per_frame': 10,
+          'video_format': 'm3u8',
+          'video_quality_level': 2,
+          'write_video': True,
+      })
+      name = os.path.join(directory, 'episode_done_test')
+      active_dump = observation_processor.MultiCameraActiveDump(
+          name, 25, dump_config)
+      for frame_index in range(25):
+        frames = {
+            camera: np.full(
+                (24, 32, 3), frame_index * 5 + camera_index,
+                dtype=np.uint8)
+            for camera_index, camera in enumerate(cameras)
+        }
+        active_dump.add_frame(frames, engine_step={
+            camera: frame_index for camera in cameras
+        })
+
+      dump_info = active_dump.finalize()
+
+      for camera in cameras:
+        playlist = name + '_' + camera + '.m3u8'
+        segment = name + '_' + camera + '_segments.ts'
+        self.assertEqual(playlist, dump_info['videos'][camera])
+        self.assertTrue(os.path.isfile(playlist))
+        self.assertTrue(os.path.isfile(segment))
+        with open(playlist) as playlist_file:
+          playlist_text = playlist_file.read()
+        self.assertIn(os.path.basename(segment), playlist_text)
+        self.assertIn('#EXT-X-BYTERANGE:', playlist_text)
+        self.assertIn('#EXT-X-ENDLIST', playlist_text)
+      self.assertEqual(dump_info['videos'][cameras[0]], dump_info['video'])
+      self.assertEqual(2, len([
+          path for path in os.listdir(directory) if path.endswith('.m3u8')
+      ]))
+      self.assertEqual(2, len([
+          path for path in os.listdir(directory) if path.endswith('.ts')
+      ]))
+
+  def test_m3u8_masks_fall_back_to_mp4(self):
+    with tempfile.TemporaryDirectory() as directory:
+      dump_config = config.Config({
+          'render_resolution_x': 32,
+          'render_resolution_y': 24,
+          'video_format': 'm3u8',
+          'video_quality_level': 2,
+          'write_segmentation_video': True,
+          'write_instance_segmentation_video': True,
+      })
+      name = os.path.join(directory, 'episode_done_test')
+      active_dump = observation_processor.ActiveDump(name, 2, dump_config)
+      labels = np.zeros((24, 32, 3), dtype=np.uint8)
+      labels[:, :16] = 17
+      active_dump.add_frame(np.zeros_like(labels), labels, engine_step=10)
+
+      dump_info = active_dump.finalize()
+
+      self.assertEqual(
+          name + '_segmentation.mp4', dump_info['segmentation_video'])
+      self.assertEqual(
+          name + '_instances.mp4',
+          dump_info['instance_segmentation_video'])
 
   def test_mp4_format_applies_to_segmentation_videos(self):
     with tempfile.TemporaryDirectory() as directory:

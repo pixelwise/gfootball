@@ -122,6 +122,7 @@ class Match {
     unsigned long GetActualTime_ms() const { return actualTime_ms; }
     void BumpActualTime_ms(unsigned long time);
     void UpdateIngameCamera();
+    bool ApplyStaticSideCamera();
 
 
     boost::intrusive_ptr<Camera> GetCamera() { DO_VALIDATION; return camera; }
@@ -130,6 +131,7 @@ class Match {
     void ProcessState(EnvState* state);
     bool Process();
     void UpdateCamera();
+    void UpdateCameraForRender();
     void PreparePutBuffers();
     void FetchPutBuffers();
     void Put();

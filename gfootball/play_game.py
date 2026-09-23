@@ -33,6 +33,7 @@ from absl import flags
 from absl import logging
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
 
@@ -67,6 +68,7 @@ class GameConfig(BaseSettings):
   players: str = ""
   level: Scenario = Scenario.STANDARD
   camera: CameraType = CameraType.WIDE
+  cameras: Optional[list[CameraType]] = None
   custom_display_stats: Optional[str] = None
   display_game_stats: bool = True
   episodes: int = Field(default=1, ge=0)
@@ -77,7 +79,7 @@ class GameConfig(BaseSettings):
   render_resolution_y: int = 720
   real_time: bool = False
   tracesdir: Path = Path(tempfile.gettempdir()) / "dumps"
-  video_format: Literal["avi", "webm", "mp4"] = "avi"
+  video_format: Literal["avi", "webm", "mp4", "m3u8"] = "avi"
   video_quality_level: int = 0
   write_video: bool = True
   write_segmentation_video: bool = True
@@ -86,6 +88,17 @@ class GameConfig(BaseSettings):
   write_single_frame: bool = False
   game_engine_random_seed: int = 48
   display_settings: DisplaySettings = Field(default_factory=DisplaySettings)
+
+  @model_validator(mode='after')
+  def validate_cameras(self):
+    if self.cameras is None:
+      return self
+    if not self.cameras:
+      raise ValueError('cameras must contain at least one camera')
+    if len(set(self.cameras)) != len(self.cameras):
+      raise ValueError('cameras must not contain duplicates')
+    self.camera = self.cameras[0]
+    return self
 
   @classmethod
   def from_yaml(cls, path: str):
