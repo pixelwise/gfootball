@@ -1,5 +1,6 @@
 """Tests for the interactive game runner."""
 
+import io
 import unittest
 import cv2
 import numpy as np
@@ -52,7 +53,7 @@ class PlayGameTest(unittest.TestCase):
   def test_one_episode_stops_without_another_reset(self):
     env = FakeEnv([False, True])
 
-    play_game.run_episodes(env, episodes=1)
+    play_game.run_episodes(env, episodes=1, show_progress=False)
 
     self.assertEqual(1, env.reset_calls)
     self.assertEqual(2, env.step_calls)
@@ -60,7 +61,7 @@ class PlayGameTest(unittest.TestCase):
   def test_multiple_episodes_reset_between_episodes(self):
     env = FakeEnv([True, True])
 
-    play_game.run_episodes(env, episodes=2)
+    play_game.run_episodes(env, episodes=2, show_progress=False)
 
     self.assertEqual(2, env.reset_calls)
     self.assertEqual(2, env.step_calls)
@@ -127,6 +128,134 @@ class PlayGameTest(unittest.TestCase):
     self.assertEqual(['rgb_array'], env.render_calls)
     np.testing.assert_array_equal(
         np.full((2, 3, 3), [10, 20, 30], dtype=np.uint8), frame)
+
+
+class FakeClock(object):
+
+  def __init__(self):
+    self.now = 0.0
+
+  def __call__(self):
+    return self.now
+
+  def advance(self, seconds):
+    self.now += seconds
+
+
+class FakeStream(io.StringIO):
+
+  def __init__(self, is_tty):
+    super().__init__()
+    self._is_tty = is_tty
+
+  def isatty(self):
+    return self._is_tty
+
+
+class ProgressReportingTest(unittest.TestCase):
+
+  def test_tty_progress_contains_percentage_timing_rate_and_eta(self):
+    clock = FakeClock()
+    stream = FakeStream(is_tty=True)
+    progress = play_game._EpisodeProgress(2, True, stream, clock)
+
+    progress.start_episode(1, {'engine_step': 0, 'steps_left': 100})
+
+    clock.advance(2)
+    progress.update({'engine_step': 50, 'steps_left': 50})
+
+    output = stream.getvalue()
+    self.assertIn('Episode 1/2', output)
+    self.assertIn('50.0%', output)
+    self.assertIn('elapsed 00:02', output)
+    self.assertIn('25.0 steps/s', output)
+    self.assertIn('ETA 00:02', output)
+
+  def test_progress_supports_player_observation_lists(self):
+    clock = FakeClock()
+    stream = FakeStream(is_tty=True)
+    progress = play_game._EpisodeProgress(1, True, stream, clock)
+
+    progress.start_episode(1, [{'steps_left': 100}])
+    clock.advance(1)
+    progress.update([{'steps_left': 50}])
+
+    self.assertIn('50.0%', stream.getvalue())
+    self.assertIn('50/100', stream.getvalue())
+
+  def test_non_tty_progress_is_throttled_and_completion_is_immediate(self):
+    clock = FakeClock()
+    stream = FakeStream(is_tty=False)
+    progress = play_game._EpisodeProgress(1, True, stream, clock)
+
+    progress.start_episode(1, {'steps_left': 100})
+    clock.advance(4)
+    progress.update({'steps_left': 80})
+    self.assertEqual(1, len(stream.getvalue().splitlines()))
+
+    clock.advance(1)
+    progress.update({'steps_left': 50})
+    self.assertEqual(2, len(stream.getvalue().splitlines()))
+
+    progress.update({'steps_left': 50}, done=True)
+    lines = stream.getvalue().splitlines()
+    self.assertEqual(3, len(lines))
+    self.assertIn('100.0%', lines[-1])
+    self.assertIn('ETA 00:00', lines[-1])
+
+  def test_disabled_progress_writes_nothing(self):
+    stream = FakeStream(is_tty=True)
+    progress = play_game._EpisodeProgress(1, False, stream, FakeClock())
+
+    progress.start_episode(1, {'steps_left': 100})
+    progress.update({'steps_left': 0}, done=True)
+    progress.close()
+
+    self.assertEqual('', stream.getvalue())
+
+  def test_early_completion_is_reported_as_complete(self):
+    stream = FakeStream(is_tty=False)
+    progress = play_game._EpisodeProgress(1, True, stream, FakeClock())
+
+    progress.start_episode(1, {'steps_left': 100})
+    progress.update({'steps_left': 75}, done=True)
+
+    self.assertIn('100.0%', stream.getvalue().splitlines()[-1])
+
+  def test_continuous_run_omits_episode_total_and_closes_line_on_interrupt(self):
+    class InterruptingEnv(object):
+
+      def __init__(self):
+        self.steps = 0
+
+      def reset(self):
+        return {'steps_left': 10}
+
+      def step(self, actions):
+        del actions
+        self.steps += 1
+        if self.steps == 1:
+          return {'steps_left': 0}, None, True, {}
+        raise KeyboardInterrupt()
+
+    stream = FakeStream(is_tty=True)
+    with self.assertRaises(KeyboardInterrupt):
+      play_game.run_episodes(
+          InterruptingEnv(), episodes=0, progress_stream=stream,
+          clock=FakeClock())
+
+    self.assertIn('Episode 2 [', stream.getvalue())
+    self.assertNotIn('Episode 2/', stream.getvalue())
+    self.assertTrue(stream.getvalue().endswith('\n'))
+
+  def test_show_progress_defaults_to_true_and_loads_from_yaml(self):
+    self.assertTrue(play_game.GameConfig().show_progress)
+    with tempfile.NamedTemporaryFile(mode='w') as config_file:
+      yaml.safe_dump({'show_progress': False}, config_file)
+      config_file.flush()
+      config = play_game.GameConfig.from_yaml(config_file.name)
+
+    self.assertFalse(config.show_progress)
 
 
 if __name__ == '__main__':
