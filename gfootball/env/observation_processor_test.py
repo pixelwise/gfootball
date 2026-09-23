@@ -6,7 +6,9 @@ import cv2
 import numpy as np
 import os
 import pickle
+from pathlib import Path
 import tempfile
+from unittest import mock, skipUnless
 
 from gfootball.env import config
 from gfootball.env import observation_processor
@@ -267,29 +269,174 @@ class ObservationProcessorTest(absltest.TestCase):
           path for path in os.listdir(directory) if path.endswith('.ts')
       ]))
 
-  def test_m3u8_masks_fall_back_to_mp4(self):
+  @skipUnless(observation_processor.shutil.which('ffmpeg'),
+              'ffmpeg is required for HLS integration tests')
+  def test_active_dump_writes_single_file_hls_video(self):
+    with tempfile.TemporaryDirectory() as directory:
+      dump_config = config.Config({
+          'render_resolution_x': 32,
+          'render_resolution_y': 24,
+          'physics_steps_per_frame': 10,
+          'video_format': 'm3u8',
+          'video_quality_level': 2,
+          'write_video': True,
+          'write_ball_coordinates': True,
+      })
+      name = os.path.join(directory, 'episode_done_test')
+      active_dump = observation_processor.ActiveDump(name, 25, dump_config)
+      for frame_index in range(25):
+        frame = np.full((24, 32, 3), frame_index * 5, dtype=np.uint8)
+        active_dump.add_frame(
+            frame, ball_screen_position=(0.25, 0.5),
+            ball_screen_visible=True, engine_step=frame_index)
+
+      dump_info = active_dump.finalize()
+      playlist = Path(name + '.m3u8')
+      segment = Path(name + '_segments.ts')
+
+      self.assertEqual(str(playlist), dump_info['video'])
+      self.assertTrue(playlist.is_file())
+      self.assertTrue(segment.is_file())
+      self.assertEqual([playlist], list(Path(directory).glob('*.m3u8')))
+      self.assertEqual([segment], list(Path(directory).glob('*.ts')))
+      playlist_text = playlist.read_text()
+      self.assertIn('#EXT-X-PLAYLIST-TYPE:VOD', playlist_text)
+      self.assertIn('#EXT-X-BYTERANGE:', playlist_text)
+      self.assertIn('#EXTINF:2.000000,', playlist_text)
+      self.assertIn('episode_done_test_segments.ts', playlist_text)
+      self.assertIn('#EXT-X-ENDLIST', playlist_text)
+      self.assertGreaterEqual(playlist_text.count('#EXTINF:'), 2)
+
+      video = cv2.VideoCapture(str(playlist))
+      self.assertTrue(video.isOpened())
+      self.assertEqual(25, int(video.get(cv2.CAP_PROP_FRAME_COUNT)))
+      self.assertEqual(10, int(round(video.get(cv2.CAP_PROP_FPS))))
+      ok, decoded_frame = video.read()
+      video.release()
+      self.assertTrue(ok)
+      self.assertEqual((24, 32, 3), decoded_frame.shape)
+
+      with np.load(dump_info['ball_coordinates']) as ball_data:
+        self.assertEqual(25, len(ball_data['xy']))
+        np.testing.assert_array_equal(ball_data['engine_step'], range(25))
+
+  def test_m3u8_masks_fall_back_to_mp4_without_ffmpeg(self):
     with tempfile.TemporaryDirectory() as directory:
       dump_config = config.Config({
           'render_resolution_x': 32,
           'render_resolution_y': 24,
           'video_format': 'm3u8',
           'video_quality_level': 2,
+          'write_video': False,
           'write_segmentation_video': True,
           'write_instance_segmentation_video': True,
       })
       name = os.path.join(directory, 'episode_done_test')
-      active_dump = observation_processor.ActiveDump(name, 2, dump_config)
+      with mock.patch.object(observation_processor.shutil, 'which',
+                             return_value=None):
+        active_dump = observation_processor.ActiveDump(name, 2, dump_config)
       labels = np.zeros((24, 32, 3), dtype=np.uint8)
       labels[:, :16] = 17
       active_dump.add_frame(np.zeros_like(labels), labels, engine_step=10)
+      active_dump.add_frame(np.zeros_like(labels), labels, engine_step=20)
 
       dump_info = active_dump.finalize()
 
-      self.assertEqual(
-          name + '_segmentation.mp4', dump_info['segmentation_video'])
-      self.assertEqual(
-          name + '_instances.mp4',
-          dump_info['instance_segmentation_video'])
+      expected_videos = {
+          'segmentation_video': name + '_segmentation.mp4',
+          'instance_segmentation_video': name + '_instances.mp4',
+      }
+      for key, expected_name in expected_videos.items():
+        self.assertEqual(expected_name, dump_info[key])
+        video = cv2.VideoCapture(expected_name)
+        self.assertTrue(video.isOpened())
+        self.assertEqual(2, int(video.get(cv2.CAP_PROP_FRAME_COUNT)))
+        video.release()
+      self.assertFalse(list(Path(directory).glob('*.m3u8')))
+      self.assertFalse(list(Path(directory).glob('*.ts')))
+
+  def test_unknown_video_format_is_rejected_at_runtime(self):
+    with tempfile.TemporaryDirectory() as directory:
+      dump_config = config.Config({
+          'render_resolution_x': 32,
+          'render_resolution_y': 24,
+          'video_format': 'mov',
+          'write_video': True,
+      })
+      with self.assertRaisesRegex(ValueError, 'Unsupported video format: mov'):
+        observation_processor.ActiveDump(
+            os.path.join(directory, 'episode_done_test'), 1, dump_config)
+
+  def test_m3u8_requires_ffmpeg_for_rgb_video(self):
+    with tempfile.TemporaryDirectory() as directory:
+      dump_config = config.Config({
+          'render_resolution_x': 32,
+          'render_resolution_y': 24,
+          'video_format': 'm3u8',
+          'video_quality_level': 2,
+          'write_video': True,
+      })
+      with mock.patch.object(observation_processor.shutil, 'which',
+                             return_value=None):
+        with self.assertRaisesRegex(RuntimeError, 'ffmpeg was not found'):
+          observation_processor.ActiveDump(
+              os.path.join(directory, 'episode_done_test'), 1, dump_config)
+
+  def test_m3u8_rejects_odd_rgb_dimensions(self):
+    with tempfile.TemporaryDirectory() as directory:
+      dump_config = config.Config({
+          'render_resolution_x': 31,
+          'render_resolution_y': 24,
+          'video_format': 'm3u8',
+          'video_quality_level': 2,
+          'write_video': True,
+      })
+      with self.assertRaisesRegex(ValueError, 'even render dimensions'):
+        observation_processor.ActiveDump(
+            os.path.join(directory, 'episode_done_test'), 1, dump_config)
+
+  def test_m3u8_encoder_failure_is_reported_and_staging_is_removed(self):
+    with tempfile.TemporaryDirectory() as directory:
+      playlist = os.path.join(directory, 'episode_done_test.m3u8')
+      process = mock.Mock()
+      process.wait.return_value = 1
+      with mock.patch.object(observation_processor.shutil, 'which',
+                             return_value='/usr/bin/ffmpeg'):
+        with mock.patch.object(observation_processor.subprocess, 'Popen',
+                               return_value=process):
+          writer = observation_processor._HlsVideoWriter(
+              playlist, (32, 24), 10, 2)
+      writer.write(np.zeros((24, 32, 3), dtype=np.uint8))
+
+      with self.assertRaisesRegex(
+          RuntimeError, 'FFmpeg failed to finalize.*exit code 1'):
+        writer.release()
+
+      process.stdin.close.assert_called_once_with()
+      self.assertFalse(Path(playlist).exists())
+      self.assertFalse(
+          Path(directory, 'episode_done_test_segments.ts').exists())
+      self.assertFalse(list(Path(directory).glob('.gfootball-hls-*')))
+
+  @skipUnless(observation_processor.shutil.which('ffmpeg'),
+              'ffmpeg is required for HLS integration tests')
+  def test_empty_m3u8_dump_cleans_up_and_finalize_is_idempotent(self):
+    with tempfile.TemporaryDirectory() as directory:
+      dump_config = config.Config({
+          'render_resolution_x': 32,
+          'render_resolution_y': 24,
+          'video_format': 'm3u8',
+          'video_quality_level': 2,
+          'write_video': True,
+      })
+      name = os.path.join(directory, 'episode_done_test')
+      active_dump = observation_processor.ActiveDump(name, 0, dump_config)
+
+      self.assertNotIn('video', active_dump.finalize())
+      self.assertEqual({}, active_dump.finalize())
+      self.assertFalse(Path(name + '.m3u8').exists())
+      self.assertFalse(Path(name + '_segments.ts').exists())
+      self.assertFalse(list(Path(directory).glob('.gfootball-hls-*')))
 
   def test_mp4_format_applies_to_segmentation_videos(self):
     with tempfile.TemporaryDirectory() as directory:

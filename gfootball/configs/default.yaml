@@ -18,6 +18,7 @@ write_segmentation_video: true
 write_instance_segmentation_video: true
 write_ball_coordinates: true
 write_single_frame: false
+show_progress: true
 game_engine_random_seed: 42
 display_settings:
   radar: true
