@@ -86,6 +86,30 @@ class PlayGameTest(unittest.TestCase):
 
     self.assertTrue(config.write_single_frame)
 
+  def test_static_side_1_config_is_loaded(self):
+    config = play_game.GameConfig.from_yaml(
+        'gfootball/configs/static-side-1.yaml')
+
+    self.assertEqual(play_game.CameraType.STATIC_SIDE_1, config.camera)
+    self.assertEqual(
+        config.render_resolution_x * 16, config.render_resolution_y * 9)
+
+  def test_static_side_2_config_is_loaded(self):
+    config = play_game.GameConfig.from_yaml(
+        'gfootball/configs/static-side-2.yaml')
+
+    self.assertEqual(play_game.CameraType.STATIC_SIDE_2, config.camera)
+    self.assertEqual(
+        config.render_resolution_x * 16, config.render_resolution_y * 9)
+
+  def test_static_side_3_config_is_loaded(self):
+    config = play_game.GameConfig.from_yaml(
+        'gfootball/configs/static-side-3.yaml')
+
+    self.assertEqual(play_game.CameraType.STATIC_SIDE_3, config.camera)
+    self.assertEqual(
+        config.render_resolution_x * 16, config.render_resolution_y * 9)
+
   def test_write_single_frame_writes_initial_render(self):
     env = FakeRenderEnv()
     with tempfile.TemporaryDirectory() as directory:
