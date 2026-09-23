@@ -74,6 +74,11 @@ class PlayGameTest(unittest.TestCase):
 
     self.assertEqual('mp4', game_config.video_format)
 
+  def test_m3u8_is_a_valid_video_format(self):
+    game_config = play_game.GameConfig(video_format='m3u8')
+
+    self.assertEqual('m3u8', game_config.video_format)
+
   def test_unknown_video_format_is_rejected(self):
     with self.assertRaises(ValidationError):
       play_game.GameConfig(video_format='mov')

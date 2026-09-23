@@ -77,7 +77,7 @@ class GameConfig(BaseSettings):
   render_resolution_y: int = 720
   real_time: bool = False
   tracesdir: Path = Path(tempfile.gettempdir()) / "dumps"
-  video_format: Literal["avi", "webm", "mp4"] = "avi"
+  video_format: Literal["avi", "webm", "mp4", "m3u8"] = "avi"
   video_quality_level: int = 0
   write_video: bool = True
   write_segmentation_video: bool = True

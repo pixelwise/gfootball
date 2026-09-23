@@ -15,8 +15,9 @@ are controlled by the following set of flags:
     episode animation.
 -  `video_format` - container and codec used for the rendered episode. Supported
    values are `avi` (Xvid, Motion JPEG, or lossless PNG depending on quality),
-   `webm` (VP8), and `mp4` (MPEG-4 Part 2). The selected format also applies to
-   semantic and instance segmentation videos.
+   `webm` (VP8), `mp4` (MPEG-4 Part 2), and `m3u8` (H.264 HLS VOD). HLS creates
+   `<dump-name>.m3u8` and one byte-range `<dump-name>_segments.ts` file.
+   Semantic and instance segmentation videos use MP4 when HLS is selected.
 -  `video_quality_level` - video quality from `0` (low) through `2` (high). Low
    quality limits output to 800x450. Medium and high retain the configured render
    resolution. AVI also selects a progressively higher-quality codec; WebM and
@@ -25,11 +26,14 @@ are controlled by the following set of flags:
 -  `write_segmentation_video` - should a companion video be recorded with player
    pixels in white and all other pixels in black. The file is named
    `<dump-name>_segmentation.<video_format>` and requires rendering to be enabled.
+   With `video_format: m3u8`, the file is instead named
+   `<dump-name>_segmentation.mp4`.
    Segmentation videos are lossless when AVI is selected. MP4 and WebM use lossy
    codecs and should be treated as visualizations rather than exact label data.
 -  `write_instance_segmentation_video` - should a companion video be recorded
    containing player instance labels. It is named
-   `<dump-name>_instances.<video_format>`. AVI preserves the labels losslessly;
+   `<dump-name>_instances.<video_format>`. With `video_format: m3u8`, the file is
+   instead named `<dump-name>_instances.mp4`. AVI preserves the labels losslessly;
    MP4 and WebM do not guarantee exact label values after decoding.
 
 There are following scripts provided to operate on trace dumps:
