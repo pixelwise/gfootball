@@ -31,6 +31,7 @@ import traceback
 from absl import logging
 from gfootball.env import constants as const
 from gfootball.env import football_action_set
+from gfootball.env import genptz_manifest
 from gfootball.scenarios import e_PlayerRole_GK
 import numpy as np
 from six.moves import range
@@ -818,6 +819,7 @@ class MultiCameraActiveDump(object):
     self._finalized = True
     dump_info = {}
     primary_camera = next(iter(self._camera_dumps))
+    frame_dim = self._camera_dumps[primary_camera]._frame_dim
     camera_info = collections.OrderedDict()
     errors = []
     for camera, camera_dump in self._camera_dumps.items():
@@ -857,6 +859,18 @@ class MultiCameraActiveDump(object):
       raise RuntimeError(
           'Failed to finalize camera writers: %s' %
           ', '.join(camera for camera, _ in errors))
+    videos = dump_info.get('videos', {})
+    if (WRITE_FILES and self._config['write_video'] and
+        self._config['video_format'] == 'm3u8' and
+        set(videos) == set(genptz_manifest.CALIBRATED_CAMERAS)):
+      fps = (const.PHYSICS_STEPS_PER_SECOND /
+             self._config['physics_steps_per_frame'])
+      recording_json = genptz_manifest.write_genptz_manifest(
+          self._name, videos, frame_dim, fps)
+      if recording_json:
+        dump_info['recording_json'] = recording_json
+        logging.info('genptzvideo recording manifest written to %s',
+                     recording_json)
     return dump_info
 
 

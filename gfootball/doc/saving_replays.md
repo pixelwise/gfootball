@@ -18,6 +18,11 @@ are controlled by the following set of flags:
    `webm` (VP8), `mp4` (MPEG-4 Part 2), and `m3u8` (H.264 HLS VOD). HLS creates
    `<dump-name>.m3u8` and one byte-range `<dump-name>_segments.ts` file.
    Semantic and instance segmentation videos use MP4 when HLS is selected.
+   A four-camera `static-side-0` through `static-side-3` HLS dump also creates
+   `<episode-directory>/recording.json`, which maps the generated streams to the
+   Wolfsburg `cam7` calibration for `genptzvideo`. If several dumps share a
+   directory, the latest successfully finalized compatible dump replaces this
+   manifest atomically.
 -  `video_quality_level` - video quality from `0` (low) through `2` (high). Low
    quality limits output to 800x450. Medium and high retain the configured render
    resolution. AVI also selects a progressively higher-quality codec; WebM and
@@ -41,6 +46,50 @@ There are following scripts provided to operate on trace dumps:
 -  `dump_to_txt.py` - converts trace dump to human-readable form.
 -  `dump_to_video.py` - converts trace dump to a 2D representation video.
 -  `replay.py` - replays a given trace dump using environment.
+
+## Stitching calibrated camera dumps
+
+Four-camera static-side M3U8 dumps can be rendered as a stitched overview with
+`genptzvideo`. The command discovers `recording.json` in `--data-dir`; its
+`cam7_sub` preview stream groups the four synchronized physical streams for
+`--use-preview-input`:
+
+```sh
+/opt/gameon_core/bin/gameon_env genptzvideo \
+  --data-dir ./dumps/episode-20260928-163051 \
+  --view-id 15e6e2e9-2ccc-4b99-f28b-1b80c60d66d7 \
+  --out ./dumps/episode-20260928-163051/overview.mp4 \
+  --num-hardware-decoder 4 \
+  --use-hardware-encoder \
+  --fx 1.0 \
+  --fy 1.0 \
+  -w 1824 \
+  -h 608 \
+  --overview-margin 1.0 \
+  --overview-headspace 2.0 \
+  --pan-radians 0.008000001311302185 \
+  --tilt-radians 0.40999913215637207 \
+  --scale 0.4041883647441864 \
+  --colorspace bt709 \
+  --colorrange full \
+  --vprofile high \
+  --quality high \
+  --vbr \
+  --no-scoreboard \
+  --with-lens true \
+  --smooth false \
+  --motion-blur false \
+  --fps 25 \
+  --gop-length 50 \
+  --logo-opacity 0 \
+  --logo-size 0 \
+  --use-preview-input
+```
+
+The physical stream metadata retains the generated input frame rate (`100 /
+physics_steps_per_frame`). The command's `--fps 25` independently selects the
+stitched output frame rate. `--with-lens true` intentionally enables distortion
+for the final virtual-camera output.
 
 ## Environment logs
 Environment uses `absl.logging` module for logging.

@@ -2,6 +2,7 @@
 """Tests for observation dump processing."""
 
 from absl.testing import absltest
+import json
 import cv2
 import numpy as np
 import os
@@ -262,12 +263,63 @@ class ObservationProcessorTest(absltest.TestCase):
         self.assertIn('#EXT-X-BYTERANGE:', playlist_text)
         self.assertIn('#EXT-X-ENDLIST', playlist_text)
       self.assertEqual(dump_info['videos'][cameras[0]], dump_info['video'])
+      self.assertNotIn('recording_json', dump_info)
       self.assertEqual(2, len([
           path for path in os.listdir(directory) if path.endswith('.m3u8')
       ]))
       self.assertEqual(2, len([
           path for path in os.listdir(directory) if path.endswith('.ts')
       ]))
+
+  @skipUnless(observation_processor.shutil.which('ffmpeg'),
+              'ffmpeg is required for HLS integration tests')
+  def test_four_calibrated_hls_cameras_write_genptz_manifest(self):
+    with tempfile.TemporaryDirectory() as directory:
+      cameras = [
+          'static-side-3', 'static-side-1',
+          'static-side-0', 'static-side-2',
+      ]
+      dump_config = config.Config({
+          'cameras': cameras,
+          'display_game_stats': False,
+          'render_resolution_x': 32,
+          'render_resolution_y': 24,
+          'physics_steps_per_frame': 10,
+          'video_format': 'm3u8',
+          'video_quality_level': 2,
+          'write_video': True,
+      })
+      name = os.path.join(directory, 'episode_done_test')
+      active_dump = observation_processor.MultiCameraActiveDump(
+          name, 1, dump_config)
+      frames = {
+          camera: np.full((24, 32, 3), camera_index * 20,
+                          dtype=np.uint8)
+          for camera_index, camera in enumerate(cameras)
+      }
+      active_dump.add_frame(frames, engine_step={
+          camera: 0 for camera in cameras
+      })
+
+      dump_info = active_dump.finalize()
+
+      manifest_path = os.path.join(directory, 'recording.json')
+      self.assertEqual(manifest_path, dump_info['recording_json'])
+      with open(manifest_path, encoding='utf-8') as manifest_file:
+        manifest = json.load(manifest_file)
+      expected_names = [
+          name.split(os.sep)[-1] + '_static-side-%d' % index
+          for index in range(4)
+      ]
+      self.assertEqual(expected_names, manifest['views'][0]['streams'])
+      self.assertEqual('cam7_sub', manifest['views'][0]['preview_stream'])
+      self.assertEqual(
+          expected_names, manifest['streams'][4]['concatenated_streams'])
+      self.assertFalse(os.path.exists(name + '_recording.json'))
+      self.assertEqual(10.0, manifest['streams'][0]['fps'])
+      self.assertEqual(32, manifest['streams'][0]['width'])
+      self.assertEqual(24, manifest['streams'][0]['height'])
+      self.assertEqual({}, active_dump.finalize())
 
   @skipUnless(observation_processor.shutil.which('ffmpeg'),
               'ffmpeg is required for HLS integration tests')
