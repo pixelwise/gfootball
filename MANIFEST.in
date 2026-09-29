@@ -1,5 +1,6 @@
 include gfootball/build_game_engine.*
 recursive-include gfootball/colabs *
+recursive-include gfootball/data *
 recursive-include gfootball/doc *
 recursive-include gfootball/eval_server/proto *
 recursive-include gfootball/examples *

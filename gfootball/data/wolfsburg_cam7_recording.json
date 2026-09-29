@@ -1,0 +1,309 @@
+{
+  "id": "4fe34067-e277-447a-af7e-9e565efad535",
+  "name": "Wolfsburg cam7 calibration template",
+  "start_timestamp": "2025-09-14 15:30:00.000",
+  "start_timestamp_utc": "2025-09-14 13:30:00.000",
+  "duration_seconds": 0.0,
+  "description": "Calibration derived from Wolfsburg recording 4fe34067-e277-447a-af7e-9e565efad535",
+  "is_live": false,
+  "is_match": false,
+  "match_type": null,
+  "streams": [
+    {
+      "bitrate": null,
+      "concatenated_streams": null,
+      "fps": 25.0,
+      "friendly_name": "AOK - Pano Mitte - 1",
+      "height": 3840,
+      "hflip": false,
+      "id": "8a70d95c-7c96-448d-de2e-ec431521e08e",
+      "is_ptz": false,
+      "name": "cam7_0",
+      "offset_seconds": 0.0,
+      "path": null,
+      "rot90": null,
+      "source_id": "b210a681-7260-4cf2-b25d-f70dedcac092",
+      "width": 2160
+    },
+    {
+      "bitrate": null,
+      "concatenated_streams": null,
+      "fps": 25.0,
+      "friendly_name": "AOK - Pano Mitte - 2",
+      "height": 3840,
+      "hflip": false,
+      "id": "44098550-3765-4f33-bd74-aa5f85b48c11",
+      "is_ptz": false,
+      "name": "cam7_1",
+      "offset_seconds": 0.0,
+      "path": null,
+      "rot90": null,
+      "source_id": "b210a681-7260-4cf2-b25d-f70dedcac092",
+      "width": 2160
+    },
+    {
+      "bitrate": null,
+      "concatenated_streams": null,
+      "fps": 25.0,
+      "friendly_name": "AOK - Pano Mitte - 3",
+      "height": 3840,
+      "hflip": false,
+      "id": "2c9210b5-b70e-4fa6-bdce-c050a16ef835",
+      "is_ptz": false,
+      "name": "cam7_2",
+      "offset_seconds": 0.0,
+      "path": null,
+      "rot90": null,
+      "source_id": "b210a681-7260-4cf2-b25d-f70dedcac092",
+      "width": 2160
+    },
+    {
+      "bitrate": null,
+      "concatenated_streams": null,
+      "fps": 25.0,
+      "friendly_name": "AOK - Pano Mitte - 4",
+      "height": 3840,
+      "hflip": false,
+      "id": "c531ffac-137f-42d7-d3c4-a048ea44b5c2",
+      "is_ptz": false,
+      "name": "cam7_3",
+      "offset_seconds": 0.0,
+      "path": null,
+      "rot90": null,
+      "source_id": "b210a681-7260-4cf2-b25d-f70dedcac092",
+      "width": 2160
+    },
+    {
+      "bitrate": null,
+      "concatenated_streams": [
+        "cam7_0",
+        "cam7_1",
+        "cam7_2",
+        "cam7_3"
+      ],
+      "fps": null,
+      "friendly_name": "AOK - Pano Mitte - sub",
+      "height": null,
+      "hflip": false,
+      "id": "d03449a5-f2a9-45c0-d736-50a1f8958f19",
+      "is_ptz": false,
+      "name": "cam7_sub",
+      "offset_seconds": null,
+      "path": null,
+      "rot90": null,
+      "source_id": null,
+      "width": null
+    }
+  ],
+  "tracking_streams": [],
+  "audio_streams": [],
+  "views": [
+    {
+      "cameras": [
+        {
+          "has_clut": null,
+          "height": 3840,
+          "id": "f8098d92-a78e-46d6-83a5-88bf38dcb945",
+          "is_ptz": false,
+          "lens": {
+            "aspect": 0.5625,
+            "cx": 0.49440938234329224,
+            "cy": 0.5025497078895569,
+            "k1": -0.31888890266418457,
+            "k2": 0.09000000357627869,
+            "kind": 0,
+            "p1": 0.0,
+            "p2": 0.0,
+            "scale": 1.0
+          },
+          "name": "cam7_0",
+          "projection": [
+            2.1297607421875,
+            0.429455041885376,
+            0.8469741940498352,
+            -0.04052302613854408,
+            0.9912695288658142,
+            -0.014435659162700176,
+            -1.1139169931411743,
+            -0.49352043867111206,
+            0.024993710219860077
+          ],
+          "width": 2160
+        },
+        {
+          "has_clut": null,
+          "height": 3840,
+          "id": "8bc4d756-76e9-47f4-a022-cf3bbff0b57c",
+          "is_ptz": false,
+          "lens": {
+            "aspect": 0.5625,
+            "cx": 0.4996751546859741,
+            "cy": 0.502410352230072,
+            "k1": -0.31888890266418457,
+            "k2": 0.09000000357627869,
+            "kind": 0,
+            "p1": 0.0,
+            "p2": 0.0,
+            "scale": 1.0
+          },
+          "name": "cam7_1",
+          "projection": [
+            1.266156792640686,
+            0.16808408498764038,
+            0.34054866433143616,
+            0.00904145184904337,
+            0.9949649572372437,
+            0.0027483839076012373,
+            -0.09122703969478607,
+            -0.11822342872619629,
+            0.760033905506134
+          ],
+          "width": 2160
+        },
+        {
+          "has_clut": null,
+          "height": 3840,
+          "id": "e829e91b-ba31-40b4-9e4d-bfa05e798b06",
+          "is_ptz": false,
+          "lens": {
+            "aspect": 0.5625,
+            "cx": 0.5013847351074219,
+            "cy": 0.5020574331283569,
+            "k1": -0.31888890266418457,
+            "k2": 0.09000000357627869,
+            "kind": 0,
+            "p1": 0.0,
+            "p2": 0.0,
+            "scale": 1.0
+          },
+          "name": "cam7_2",
+          "projection": [
+            0.9305747151374817,
+            -0.17405292391777039,
+            -0.34549185633659363,
+            0.005544774234294891,
+            1.001448154449463,
+            0.0026462466921657324,
+            -0.08073218911886215,
+            0.04815211519598961,
+            1.102350115776062
+          ],
+          "width": 2160
+        },
+        {
+          "has_clut": null,
+          "height": 3840,
+          "id": "66543057-4246-4448-cf2a-30f8a43b13a4",
+          "is_ptz": false,
+          "lens": {
+            "aspect": 0.5625,
+            "cx": 0.5084876418113708,
+            "cy": 0.5001741051673889,
+            "k1": -0.31888890266418457,
+            "k2": 0.09000000357627869,
+            "kind": 0,
+            "p1": 0.0,
+            "p2": 0.0,
+            "scale": 1.0
+          },
+          "name": "cam7_3",
+          "projection": [
+            1.2962945699691772,
+            -0.42840108275413513,
+            -0.8536058664321899,
+            0.008915740065276623,
+            1.006716012954712,
+            -0.0022091760765761137,
+            -0.15000683069229126,
+            -0.06773161888122559,
+            0.874410092830658
+          ],
+          "width": 2160
+        }
+      ],
+      "clipping": {
+        "background": null,
+        "bottom_type": "cylindrical",
+        "bounds": {
+          "bottom": null,
+          "left": null,
+          "right": null,
+          "top": null
+        },
+        "top_type": "cylindrical"
+      },
+      "court": {
+        "id": "cfe75375-2414-4078-b2c6-e51420521608",
+        "is_orientation_landscape": true,
+        "name": "AOK"
+      },
+      "has_color_correction": false,
+      "icon": {
+        "angle": 0.0,
+        "x": 0.5,
+        "y": 0.8999999761581421
+      },
+      "id": "15e6e2e9-2ccc-4b99-f28b-1b80c60d66d7",
+      "name": "AOK - Pano Mitte",
+      "perspective": {
+        "fx": 0.265167236328125,
+        "fy": 0.5966262817382813,
+        "rotation": [
+          0.99970543384552,
+          0.02405479922890663,
+          0.0032254080288112164,
+          0.011522550135850906,
+          -0.5873778462409973,
+          0.8092308044433594,
+          0.02136041782796383,
+          -0.8089552521705627,
+          -0.5874819755554199
+        ],
+        "translation": [
+          0.02685573138296604,
+          -12.082696914672852,
+          40.20494842529297
+        ]
+      },
+      "preview_stream": "cam7_sub",
+      "raw_layout": null,
+      "stitch_planes": [
+        [
+          0.7346882224082947,
+          0.0026013061869889498,
+          0.678399920463562,
+          0.029999999329447746
+        ],
+        [
+          0.9999935626983643,
+          -0.0032457492779940367,
+          -0.0015399602707475424,
+          0.029999999329447746
+        ],
+        [
+          0.7346941828727722,
+          -0.0002441729011479765,
+          -0.6783984303474426,
+          0.029999999329447746
+        ]
+      ],
+      "stitch_seams": null,
+      "streams": [
+        "cam7_0",
+        "cam7_1",
+        "cam7_2",
+        "cam7_3"
+      ]
+    }
+  ],
+  "tags": [],
+  "court": {
+    "id": "cfe75375-2414-4078-b2c6-e51420521608",
+    "name": "AOK"
+  },
+  "score_home_label": null,
+  "score_away_label": null,
+  "score_home_color": null,
+  "score_away_color": null,
+  "team_names": null
+}
